@@ -57,13 +57,6 @@ Settings are saved to `config/mctwitchchat.json`, so they persist across restart
 
 GitHub Actions builds the JAR on every push. Download it from the run's *Artifacts*.
 
-To publish a release, push a version tag:
-
-```bash
-git tag v1.0.1
-git push origin v1.0.1
-```
-
-The workflow builds `mc-twitch-chat-neoforge-1.21.1-1.0.1.jar` and attaches it to a new release on the Releases page.
+To publish a release, change `mod_version` in `gradle.properties` (for example to `1.0.1`) and push to `main`. The workflow sees that `v1.0.1` doesn't exist yet. It builds `mc-twitch-chat-neoforge-1.21.1-1.0.1.jar`, creates the `v1.0.1` tag and release, and attaches the JAR. Pushing a `v*` tag yourself also works.
 
 To build locally you need Java 21. Run `./gradlew build`, and the JAR appears in `build/libs/`. `./gradlew runClient` starts a dev client.
