@@ -1,0 +1,67 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: echo "MOD_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: |
+          chmod +x gradlew
+          set -o pipefail
+          ./gradlew build --stacktrace 2>&1 | tee build.log
+
+      - name: Report build errors as annotations
+        if: failure()
+        run: |
+          grep -E "error:|What went wrong|Could not|> " -A4 build.log | head -150 > errors.txt || true
+          split -l 25 errors.txt chunk_
+          for f in chunk_*; do
+            msg=$(sed -e 's/%/%25/g' "$f" | awk 'BEGIN{ORS="%0A"} {print}')
+            echo "::error title=Build log ($f)::${msg}"
+          done
+
+      - name: Check mixin targets against Minecraft
+        if: always()
+        run: |
+          JAR=$(find build/moddev ~/.gradle -name 'neoforge-*.jar' -path '*artifacts*' 2>/dev/null | grep -v sources | head -1)
+          echo "Using $JAR"
+          if [ -n "$JAR" ]; then
+            out=$(javap -cp "$JAR" net.minecraft.client.gui.GuiGraphics | grep -E "drawString|blit\(net.minecraft.resources.ResourceLocation, int, int, float|setColor" | sed -e 's/%/%25/g' | awk 'BEGIN{ORS="%0A"} {print}')
+            echo "::notice title=GuiGraphics methods::${out}"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: mc-twitch-chat
+          path: build/libs/*.jar
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/libs/*.jar
+          generate_release_notes: true
