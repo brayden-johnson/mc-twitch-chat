@@ -41,9 +41,9 @@ public final class StreamChatManager {
     private CompletableFuture<Void> postChain = CompletableFuture.completedFuture(null);
 
     // Render thread only: lets mod deletions and timeouts remove messages from Minecraft chat.
-    private final Map<String, MessageSignature> byId = new LinkedHashMap<>(256, 0.75f, false) {
+    private final Map<String, List<MessageSignature>> byId = new LinkedHashMap<>(256, 0.75f, false) {
         @Override
-        protected boolean removeEldestEntry(Map.Entry<String, MessageSignature> eldest) {
+        protected boolean removeEldestEntry(Map.Entry<String, List<MessageSignature>> eldest) {
             return size() > 1000;
         }
     };
@@ -139,8 +139,8 @@ public final class StreamChatManager {
                 if (!cfg.respectModDeletes) return;
                 String target = m.tag("target-msg-id");
                 Minecraft.getInstance().execute(() -> {
-                    MessageSignature sig = byId.remove(target);
-                    if (sig != null) chat().deleteMessage(sig);
+                    List<MessageSignature> sigs = byId.remove(target);
+                    if (sigs != null) sigs.forEach(sig -> chat().deleteMessage(sig));
                 });
             }
             case "CLEARCHAT" -> {
@@ -172,7 +172,7 @@ public final class StreamChatManager {
         }
         if (cfg.hideCommands && text.startsWith("!")) return;
 
-        List<Segment> segments = MessageParser.parse(text, m.tag("emotes"), cfg);
+        List<Segment> segments = MessageParser.parse(text, m.tag("emotes"), m.tag("gifs"), cfg);
         String display = m.tag("display-name");
         if (display.isEmpty()) display = login;
         boolean highlight = isHighlight(text, login, cfg);
@@ -188,7 +188,7 @@ public final class StreamChatManager {
         String type = m.tag("msg-id");
         if (system.isEmpty() && "announcement".equals(type)) system = "Announcement";
         String text = m.trailing == null ? "" : m.trailing;
-        List<Segment> segments = MessageParser.parse(text, m.tag("emotes"), cfg);
+        List<Segment> segments = MessageParser.parse(text, m.tag("emotes"), m.tag("gifs"), cfg);
         String display = text.isEmpty() ? "" : (m.tag("display-name").isEmpty() ? login : m.tag("display-name"));
         ChatLine line = new ChatLine(m.tag("id"), login, display, m.tag("color"), badges(m), segments, false, false,
                 system.isEmpty() ? type : system);
@@ -202,8 +202,11 @@ public final class StreamChatManager {
                 .filter(s -> s instanceof Segment.Emote)
                 .map(s -> ((Segment.Emote) s).image().future)
                 .toArray(CompletableFuture[]::new);
+        // GIPHY files are big; give them longer so the GIF's real shape is known.
+        boolean hasGif = line.segments().stream().anyMatch(s -> s instanceof Segment.Emote e && e.lines() > 0);
+        int waitMs = hasGif ? Math.max(cfg.maxWaitMs, 5000) : cfg.maxWaitMs;
         CompletableFuture<Void> ready = CompletableFuture.allOf(waits)
-                .completeOnTimeout(null, cfg.maxWaitMs, TimeUnit.MILLISECONDS)
+                .completeOnTimeout(null, waitMs, TimeUnit.MILLISECONDS)
                 .exceptionally(t -> null);
         synchronized (chainLock) {
             postChain = postChain
@@ -226,13 +229,23 @@ public final class StreamChatManager {
         Minecraft mc = Minecraft.getInstance();
         if (mc.gui == null) return;
         ChatConfig cfg = ChatConfig.get();
+        GuiMessageTag tag = tag(cfg);
+        List<MessageSignature> sigs = new ArrayList<>();
         MessageSignature sig = signature(line.id());
-        mc.gui.getChat().addMessage(Formatter.format(cfg, line), sig, tag(cfg));
-        if (!line.id().isEmpty()) byId.put(line.id(), sig);
+        mc.gui.getChat().addMessage(Formatter.format(cfg, line), sig, tag);
+        sigs.add(sig);
+        // Blank lines under a GIF give it room; the GIF is drawn from its line down over them.
+        int extra = MessageParser.extraLines(line.segments());
+        for (int i = 0; i < extra; i++) {
+            MessageSignature spacer = signature(line.id() + "#" + i);
+            mc.gui.getChat().addMessage(Component.literal(" "), spacer, tag);
+            sigs.add(spacer);
+        }
+        if (!line.id().isEmpty()) byId.put(line.id(), sigs);
         if (!line.login().isEmpty()) {
             Deque<MessageSignature> d = byUser.computeIfAbsent(line.login(), k -> new ArrayDeque<>());
-            d.addLast(sig);
-            while (d.size() > 30) d.removeFirst();
+            sigs.forEach(d::addLast);
+            while (d.size() > 40) d.removeFirst();
         }
         if (line.highlight() && cfg.pingSound) {
             mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.EXPERIENCE_ORB_PICKUP, 1.4f));

@@ -2,7 +2,8 @@
 
 A client-side NeoForge mod that shows your Twitch chat inside the normal Minecraft chat window. It renders the emotes viewers actually see:
 
-- **Twitch emotes**: global, your channel's, and emotes from *other* channels a viewer is subscribed to. Animated emotes, like Tier 2 animated emotes, play as GIFs.
+- **Twitch emotes**: global, your channel's, and emotes from *other* channels a viewer is subscribed to. Animated emotes play.
+- **Twitch GIFs**: the GIPHY GIFs Tier 2 and Tier 3 subs send with Twitch's GIF keyboard. They play animated and take up several chat lines (adjustable).
 - **FrankerFaceZ, BetterTTV and 7TV** emotes, both global and your channel's
 - **Emoji**, drawn as colour images (Twemoji)
 - Name colours, role badges (★ broadcaster, ⚔ mod, ♦ VIP, ✦ sub), sub and raid notices, and `/me` messages
@@ -26,7 +27,7 @@ Open them with **Mods → MC Twitch Chat → Config**, with the `/streamchat` co
 |---|---|
 | Connection | Channel, on/off, status messages, reconnect / disconnect |
 | Look | Prefix (with presets), separator, message colour, name colours (Twitch or fixed), brighten dark names, timestamps, badges, sub/raid notices, the coloured Twitch bar, `/me` italics |
-| Emotes | Twitch / FFZ / BTTV / 7TV / emoji on or off, animated GIFs on or off, emote size, how long to wait for images, reload emotes, clear the image cache |
+| Emotes | Twitch / FFZ / BTTV / 7TV / emoji on or off, Twitch GIFs on or off and their size (1 to 8 lines), animation on or off, emote size, how long to wait for images, reload emotes, clear the image cache |
 | Filters | Hide `!commands`, ignored users, mention highlighting, extra highlight words, highlight colour, ping sound, mod deletions |
 
 The prefix and colour fields use `&` codes: `&d` pink, `&5` purple, `&f` white, `&7` grey, `&l` bold, `&o` italic, `&r` reset, and `&#RRGGBB` for any colour. Examples:

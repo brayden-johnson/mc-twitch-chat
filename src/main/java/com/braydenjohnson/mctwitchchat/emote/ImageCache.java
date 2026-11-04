@@ -24,10 +24,15 @@ public final class ImageCache {
         return FMLPaths.GAMEDIR.get().resolve("mctwitchchat-cache");
     }
 
+    /** Emotes and emoji: small images. */
     public static EmoteImage get(List<String> urls) {
+        return get(urls, 256, 64);
+    }
+
+    public static EmoteImage get(List<String> urls, int maxW, int maxH) {
         String key = urls.get(0);
         return IMAGES.computeIfAbsent(key, k -> {
-            EmoteImage img = new EmoteImage(k, urls);
+            EmoteImage img = new EmoteImage(k, urls, maxW, maxH);
             Http.POOL.execute(() -> load(img));
             return img;
         });
@@ -38,7 +43,7 @@ public final class ImageCache {
         for (String url : img.urls) {
             try {
                 byte[] bytes = fetch(url);
-                ImageDecoder.Decoded decoded = ImageDecoder.decode(bytes);
+                ImageDecoder.Decoded decoded = ImageDecoder.decode(bytes, img.maxW, img.maxH);
                 img.prepare(decoded);
                 Minecraft.getInstance().execute(img::upload);
                 img.future.complete(img);

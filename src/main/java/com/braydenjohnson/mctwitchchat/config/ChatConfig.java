@@ -54,6 +54,10 @@ public final class ChatConfig {
     public boolean animated = true;
     /** Emote height in GUI pixels. Chat lines are 9 px tall. */
     public int emoteSize = 9;
+    /** Twitch's GIPHY GIFs (the Tier 2 / Tier 3 sub GIF keyboard). */
+    public boolean twitchGifs = true;
+    /** How many chat lines tall a GIF is. 1 = same size as an emote. */
+    public int gifLines = 4;
     /** How long a message may wait for its emote images before it is shown anyway. */
     public int maxWaitMs = 1500;
 
@@ -137,6 +141,7 @@ public final class ChatConfig {
         if (timestamps == null) timestamps = TimestampMode.OFF;
         emoteSize = Math.max(6, Math.min(18, emoteSize));
         maxWaitMs = Math.max(0, Math.min(5000, maxWaitMs));
+        gifLines = Math.max(1, Math.min(8, gifLines));
     }
 
     /** Accepts "slayyyden", "#slayyyden", "@slayyyden" or a twitch.tv link. */

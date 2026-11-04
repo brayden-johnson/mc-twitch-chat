@@ -19,15 +19,19 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class Placeholders {
     public static final int BASE = 0xE000;
-    public static final int MAX_WIDTH = 128;
+    public static final int MAX_WIDTH = 255;
 
-    private static final Map<String, EmoteImage> BY_NAME = new ConcurrentHashMap<>();
+    /** @param height drawn height in GUI px for tall GIFs, or 0 to fit the line like an emote */
+    public record Entry(EmoteImage image, int height) {
+    }
+
+    private static final Map<String, Entry> BY_NAME = new ConcurrentHashMap<>();
     static volatile boolean used;
 
     private Placeholders() {
     }
 
-    public static EmoteImage get(String name) {
+    public static Entry get(String name) {
         return name == null ? null : BY_NAME.get(name);
     }
 
@@ -42,8 +46,11 @@ public final class Placeholders {
         float aspect;
         if (img.hasSize()) aspect = img.aspect();
         else aspect = e.heightHint() > 0 ? (float) e.widthHint() / e.heightHint() : 1f;
-        int width = Math.max(1, Math.min(MAX_WIDTH, Math.round(cfg.emoteSize * aspect)));
-        BY_NAME.put(e.name(), img);
+        boolean tall = e.lines() > 1;
+        // A tall GIF fills its own line plus the blank lines posted under it.
+        int height = tall ? e.lines() * 9 - 2 : cfg.emoteSize;
+        int width = Math.max(1, Math.min(MAX_WIDTH, Math.round(height * aspect)));
+        BY_NAME.put(e.name(), new Entry(img, tall ? height : 0));
         used = true;
         Component hover = Component.literal(e.name()).withStyle(ChatFormatting.WHITE)
                 .append(Component.literal("\n" + e.provider()).withStyle(ChatFormatting.GRAY));

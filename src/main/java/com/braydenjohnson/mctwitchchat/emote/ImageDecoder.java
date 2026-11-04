@@ -27,15 +27,23 @@ public final class ImageDecoder {
     private ImageDecoder() {
     }
 
-    public static Decoded decode(byte[] data) throws IOException {
+    /** Decodes and scales every frame down to fit maxW x maxH (never up). */
+    public static Decoded decode(byte[] data, int maxW, int maxH) throws IOException {
         if (isGif(data)) {
-            Decoded gif = decodeGif(data);
+            Decoded gif = decodeGif(data, maxW, maxH);
             if (gif != null) return gif;
         }
         if (isWebp(data)) throw new IOException("WebP images are not supported");
         BufferedImage img = ImageIO.read(new ByteArrayInputStream(data));
         if (img == null) throw new IOException("Unsupported image format");
-        return new Decoded(List.of(toArgb(img)), new int[]{0});
+        return new Decoded(List.of(fit(img, maxW, maxH)), new int[]{0});
+    }
+
+    /** A fresh ARGB copy, scaled down to fit if needed. */
+    static BufferedImage fit(BufferedImage src, int maxW, int maxH) {
+        float scale = Math.min(1f, Math.min((float) maxW / src.getWidth(), (float) maxH / src.getHeight()));
+        if (scale >= 1f) return copy(src);
+        return resize(src, Math.max(1, Math.round(src.getWidth() * scale)), Math.max(1, Math.round(src.getHeight() * scale)));
     }
 
     private static boolean isGif(byte[] d) {
@@ -47,7 +55,7 @@ public final class ImageDecoder {
                 && d[8] == 'W' && d[9] == 'E' && d[10] == 'B' && d[11] == 'P';
     }
 
-    private static Decoded decodeGif(byte[] data) throws IOException {
+    private static Decoded decodeGif(byte[] data, int maxW, int maxH) throws IOException {
         Iterator<ImageReader> readers = ImageIO.getImageReadersByFormatName("gif");
         if (!readers.hasNext()) return null;
         ImageReader reader = readers.next();
@@ -99,7 +107,7 @@ public final class ImageDecoder {
                 Graphics2D g = canvas.createGraphics();
                 g.drawImage(frame, left, top, null);
                 g.dispose();
-                frames.add(copy(canvas));
+                frames.add(fit(canvas, maxW, maxH));
                 // Browsers treat 0 and 1 centisecond delays as 100 ms; do the same.
                 delays.add(delayCs <= 1 ? 100 : delayCs * 10);
 
@@ -119,11 +127,6 @@ public final class ImageDecoder {
         } finally {
             reader.dispose();
         }
-    }
-
-    static BufferedImage toArgb(BufferedImage src) {
-        if (src.getType() == BufferedImage.TYPE_INT_ARGB) return src;
-        return copy(src);
     }
 
     static BufferedImage copy(BufferedImage src) {

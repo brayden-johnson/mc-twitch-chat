@@ -15,7 +15,7 @@ import java.util.List;
 
 /** Draws emote images into the gaps left by placeholder characters. Called after any GUI text draw. */
 public final class EmoteRenderer {
-    private record Pending(EmoteImage image, float x, float width) {
+    private record Pending(EmoteImage image, float x, float width, int height) {
     }
 
     private EmoteRenderer() {
@@ -33,8 +33,10 @@ public final class EmoteRenderer {
         text.accept((index, style, cp) -> {
             float advance = splitter.stringWidth(FormattedCharSequence.codepoint(cp, style));
             if (Placeholders.isPlaceholder(cp, style)) {
-                EmoteImage img = Placeholders.get(style.getInsertion());
-                if (img != null && img.texture() != null) found.add(new Pending(img, cursor[0], advance));
+                Placeholders.Entry entry = Placeholders.get(style.getInsertion());
+                if (entry != null && entry.image().texture() != null) {
+                    found.add(new Pending(entry.image(), cursor[0], advance, entry.height()));
+                }
             }
             cursor[0] += advance;
             return true;
@@ -57,17 +59,27 @@ public final class EmoteRenderer {
             int fh = img.frameHeight();
             if (tex == null || fw <= 0 || fh <= 0) continue;
             float drawW = p.width();
-            float drawH = Math.min(drawW / img.aspect(), 24f);
-            if (drawH * img.aspect() < drawW) drawW = drawH * img.aspect();
+            float drawH;
+            float dy;
+            if (p.height() > 0) {
+                // Tall GIF: starts at the top of its line and runs down over the blank lines below.
+                drawH = p.height();
+                if (drawH * img.aspect() < drawW) drawW = drawH * img.aspect();
+                else drawH = drawW / img.aspect();
+                dy = y - 0.5f;
+            } else {
+                drawH = Math.min(drawW / img.aspect(), 24f);
+                if (drawH * img.aspect() < drawW) drawW = drawH * img.aspect();
+                // Text glyphs sit in the top 8 px of the 9 px line; centre the emote on them.
+                dy = y + 4f - drawH / 2f;
+            }
             float dx = p.x() + (p.width() - drawW) / 2f;
-            // Text glyphs sit in the top 8 px of the 9 px line; centre the emote on them.
-            float dy = y + 4f - drawH / 2f;
             int frame = img.frameIndex(now, animate);
 
             pose.pushPose();
             pose.translate(dx, dy, 0f);
             pose.scale(drawW / fw, drawH / fh, 1f);
-            graphics.blit(tex, 0, 0, 0f, (float) (frame * img.stride()), fw, fh, fw, img.textureHeight());
+            graphics.blit(tex, 0, 0, img.u(frame), img.v(frame), fw, fh, img.textureWidth(), img.textureHeight());
             pose.popPose();
         }
         graphics.setColor(1f, 1f, 1f, 1f);

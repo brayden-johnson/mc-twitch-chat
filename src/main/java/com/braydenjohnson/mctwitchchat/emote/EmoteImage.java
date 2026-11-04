@@ -13,16 +13,17 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * One downloaded emote or emoji. All animation frames live in one texture, stacked
- * vertically with a 2 px transparent gap so smooth filtering never bleeds between frames.
+ * One downloaded emote, emoji or GIF. All animation frames live in one texture, packed in a
+ * grid with a 2 px transparent gap so smooth filtering never bleeds between frames.
  */
 public final class EmoteImage {
-    private static final int MAX_HEIGHT = 64;
-    private static final int MAX_WIDTH = 256;
-    private static final int MAX_TEXTURE = 8192;
+    private static final int MAX_TEXTURE = 4096;
+    private static final int MAX_FRAMES = 600;
 
     public final String key;
     final List<String> urls;
+    final int maxW;
+    final int maxH;
     /** Completes once the image is decoded (or has failed). */
     public final CompletableFuture<EmoteImage> future = new CompletableFuture<>();
 
@@ -30,16 +31,19 @@ public final class EmoteImage {
     private volatile int frameW;
     private int frameH;
     private int frameCount;
-    private int stride;
+    private int cols;
+    private int texW;
     private int texH;
     private int[] frameEnds = new int[0];
     private int totalMs;
     private NativeImage pending;
     private volatile ResourceLocation texture;
 
-    EmoteImage(String key, List<String> urls) {
+    EmoteImage(String key, List<String> urls, int maxW, int maxH) {
         this.key = key;
         this.urls = urls;
+        this.maxW = maxW;
+        this.maxH = maxH;
     }
 
     public boolean failed() {
@@ -66,12 +70,20 @@ public final class EmoteImage {
         return frameH;
     }
 
-    public int stride() {
-        return stride;
+    public int textureWidth() {
+        return texW;
     }
 
     public int textureHeight() {
         return texH;
+    }
+
+    public float u(int frame) {
+        return (frame % cols) * (frameW + 2);
+    }
+
+    public float v(int frame) {
+        return (frame / cols) * (frameH + 2);
     }
 
     public int frameIndex(long nowMs, boolean animate) {
@@ -90,17 +102,18 @@ public final class EmoteImage {
         future.complete(this);
     }
 
-    /** Worker thread: scale, pick frames and pack them into one image. */
+    /** Worker thread: pick frames and pack them into one image. Frames arrive already scaled. */
     void prepare(ImageDecoder.Decoded decoded) {
         List<BufferedImage> frames = decoded.frames();
         int[] delays = decoded.delaysMs();
-        int srcW = frames.get(0).getWidth();
-        int srcH = frames.get(0).getHeight();
-        float scale = Math.min(1f, Math.min((float) MAX_HEIGHT / srcH, (float) MAX_WIDTH / srcW));
-        int w = Math.max(1, Math.round(srcW * scale));
-        int h = Math.max(1, Math.round(srcH * scale));
-        int rowStride = h + 2;
-        int maxFrames = Math.max(1, Math.min(512, MAX_TEXTURE / rowStride));
+        BufferedImage first = frames.get(0);
+        int w = Math.min(first.getWidth(), MAX_TEXTURE - 2);
+        int h = Math.min(first.getHeight(), MAX_TEXTURE - 2);
+        int sx = w + 2;
+        int sy = h + 2;
+        int maxCols = Math.max(1, MAX_TEXTURE / sx);
+        int maxRows = Math.max(1, MAX_TEXTURE / sy);
+        int maxFrames = Math.max(1, Math.min(MAX_FRAMES, maxCols * maxRows));
         int step = (int) Math.ceil(frames.size() / (double) maxFrames);
 
         List<BufferedImage> picked = new ArrayList<>();
@@ -113,13 +126,16 @@ public final class EmoteImage {
         }
 
         int n = picked.size();
-        NativeImage img = new NativeImage(NativeImage.Format.RGBA, w, rowStride * n, true);
+        int c = Math.min(n, maxCols);
+        int rows = (n + c - 1) / c;
+        NativeImage img = new NativeImage(NativeImage.Format.RGBA, c * sx, rows * sy, true);
         int[] ends = new int[n];
         int total = 0;
         for (int f = 0; f < n; f++) {
             BufferedImage src = picked.get(f);
             if (src.getWidth() != w || src.getHeight() != h) src = ImageDecoder.resize(src, w, h);
-            int yOff = f * rowStride;
+            int x0 = (f % c) * sx;
+            int y0 = (f / c) * sy;
             for (int y = 0; y < h; y++) {
                 for (int x = 0; x < w; x++) {
                     int argb = src.getRGB(x, y);
@@ -128,7 +144,7 @@ public final class EmoteImage {
                     int g = (argb >> 8) & 0xFF;
                     int b = argb & 0xFF;
                     // NativeImage in 1.21.1 stores ABGR
-                    img.setPixelRGBA(x, yOff + y, (a << 24) | (b << 16) | (g << 8) | r);
+                    img.setPixelRGBA(x0 + x, y0 + y, (a << 24) | (b << 16) | (g << 8) | r);
                 }
             }
             total += pickedDelays.get(f);
@@ -137,8 +153,9 @@ public final class EmoteImage {
         this.pending = img;
         this.frameH = h;
         this.frameCount = n;
-        this.stride = rowStride;
-        this.texH = rowStride * n;
+        this.cols = c;
+        this.texW = c * sx;
+        this.texH = rows * sy;
         this.frameEnds = ends;
         this.totalMs = n > 1 ? total : 0;
         this.frameW = w; // written last: marks the size as known

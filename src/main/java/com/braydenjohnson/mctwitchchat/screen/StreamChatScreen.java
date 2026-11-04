@@ -112,7 +112,7 @@ public class StreamChatScreen extends Screen {
         ChatLine line = new ChatLine("", work.channel.isEmpty() ? "slayyyden" : work.channel,
                 work.channel.isEmpty() ? "slayyyden" : work.channel, "#C9A0FF",
                 List.of("broadcaster/1", "subscriber/12"),
-                MessageParser.parse(text, "25:9-13/305954156:38-45", work), false, false, null);
+                MessageParser.parse(text, "25:9-13/305954156:38-45", null, work), false, false, null);
         return Formatter.format(work, line);
     }
 
@@ -259,6 +259,10 @@ public class StreamChatScreen extends Screen {
             r.addChild(toggle("BetterTTV", work.bttvEmotes, v -> work.bttvEmotes = v, "BTTV global, channel and shared emotes."));
             r.addChild(toggle("7TV", work.sevenTvEmotes, v -> work.sevenTvEmotes = v, "7TV global and channel emotes."));
             r.addChild(toggle("Emoji", work.emoji, v -> work.emoji = v, "Show emoji as colour images (Twemoji)."));
+            r.addChild(toggle("Twitch GIFs", work.twitchGifs, v -> work.twitchGifs = v,
+                    "GIPHY GIFs that Tier 2 and Tier 3 subs send from Twitch's GIF keyboard. Off shows the GIF's name."));
+            r.addChild(new IntSlider("GIF size", 1, 8, 1, work.gifLines, v -> work.gifLines = v,
+                    v -> v == 1 ? "inline" : v + " lines"));
             r.addChild(new IntSlider("Emote size", 6, 18, 1, work.emoteSize, v -> work.emoteSize = v, v -> v + " px"));
             r.addChild(new IntSlider("Wait for images", 0, 5000, 100, work.maxWaitMs, v -> work.maxWaitMs = v,
                     v -> v == 0 ? "never" : String.format("%.1fs", v / 1000.0)));
