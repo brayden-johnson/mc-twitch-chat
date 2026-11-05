@@ -8,7 +8,9 @@ import com.braydenjohnson.mctwitchchat.config.ChatConfig;
 import com.braydenjohnson.mctwitchchat.emote.EmoteRegistry;
 import com.braydenjohnson.mctwitchchat.emote.ImageCache;
 import com.braydenjohnson.mctwitchchat.util.LegacyText;
+import com.braydenjohnson.mctwitchchat.twitch.TwitchAuth;
 import net.minecraft.ChatFormatting;
+import net.minecraft.Util;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Button;
@@ -52,6 +54,7 @@ public class StreamChatScreen extends Screen {
     private LinearLayout footer;
     private StringWidget statusLabel;
     private StringWidget emoteLabel;
+    private StringWidget rewardsLabel;
     private int previewTop;
 
     public StreamChatScreen(Screen parent) {
@@ -63,7 +66,7 @@ public class StreamChatScreen extends Screen {
     @Override
     protected void init() {
         tabBar = TabNavigationBar.builder(tabManager, width)
-                .addTabs(new ConnectionTab(), new LookTab(), new EmotesTab(), new FiltersTab())
+                .addTabs(new ConnectionTab(), new LookTab(), new EmotesTab(), new RewardsTab(), new FiltersTab())
                 .build();
         addRenderableWidget(tabBar);
 
@@ -93,6 +96,11 @@ public class StreamChatScreen extends Screen {
         super.tick();
         if (statusLabel != null) statusLabel.setMessage(Component.literal("Status: " + StreamChatManager.get().status()).withStyle(ChatFormatting.GRAY));
         if (emoteLabel != null) emoteLabel.setMessage(Component.literal(EmoteRegistry.summary()).withStyle(ChatFormatting.GRAY));
+        if (rewardsLabel != null) {
+            String s = TwitchAuth.loginRunning() || !TwitchAuth.loggedIn() ? TwitchAuth.status() : StreamChatManager.get().rewardsStatus();
+            rewardsLabel.setMessage(Component.literal(s).withStyle(ChatFormatting.GRAY));
+            rewardsLabel.setTooltip(Tooltip.create(Component.literal(s)));
+        }
     }
 
     @Override
@@ -112,7 +120,7 @@ public class StreamChatScreen extends Screen {
         ChatLine line = new ChatLine("", work.channel.isEmpty() ? "slayyyden" : work.channel,
                 work.channel.isEmpty() ? "slayyyden" : work.channel, "#C9A0FF",
                 List.of("broadcaster/1", "subscriber/12"),
-                MessageParser.parse(text, "25:9-13/305954156:38-45", null, work), false, false, null);
+                MessageParser.parse(text, "25:9-13/305954156:38-45", null, work), false, false, null, false);
         return Formatter.format(work, line);
     }
 
@@ -274,6 +282,50 @@ public class StreamChatScreen extends Screen {
             }, "Delete downloaded emote images from the mctwitchchat-cache folder."));
             emoteLabel = new StringWidget(W * 2 + 10, 12, Component.literal(EmoteRegistry.summary()), font).alignLeft();
             r.addChild(emoteLabel, 2);
+        }
+    }
+
+    private final class RewardsTab extends GridLayoutTab {
+        RewardsTab() {
+            super(Component.literal("Rewards"));
+            GridLayout.RowHelper r = rows(layout);
+            r.addChild(toggle("Channel points", work.showRedemptions, v -> work.showRedemptions = v,
+                    "Show channel point redemptions in chat. Needs the Twitch login below."));
+            r.addChild(toggle("Automatic rewards", work.showAutomaticRewards, v -> work.showAutomaticRewards = v,
+                    "Also show Twitch's built-in rewards, like Unlock a Sub Emote and On-Screen Celebration."));
+            r.addChild(toggle("Group gift bombs", work.groupGiftBombs, v -> work.groupGiftBombs = v,
+                    "When someone gifts several subs at once, show one line listing everyone who got one instead of a line per gift."));
+            r.addChild(button("Test redemption", b -> {
+                ChatConfig.set(work.copy());
+                StreamChatManager.get().postTestRedemption();
+            }, "Adds a sample redemption to chat so you can see how it looks."));
+
+            r.addChild(label("Twitch app Client ID"));
+            r.addChild(edit(work.twitchClientId, 64, v -> work.twitchClientId = v.trim(),
+                    "From dev.twitch.tv/console: register an app with Client Type \"Public\" and paste its Client ID here. It isn't a secret."));
+            r.addChild(button("Log in with Twitch", b -> {
+                ChatConfig.set(work.copy());
+                ChatConfig.save();
+                TwitchAuth.startLogin(work.twitchClientId,
+                        url -> Util.getPlatform().openUri(url),
+                        code -> minecraft.execute(() -> minecraft.keyboardHandler.setClipboard(code)),
+                        () -> StreamChatManager.get().syncRewards());
+            }, "Opens twitch.tv/activate. Approve the code shown here (it's also copied to your clipboard). Log in as your own channel: Twitch only lets the channel owner read redemptions."));
+            r.addChild(button("Log out", b -> {
+                TwitchAuth.logout();
+                StreamChatManager.get().syncRewards();
+            }, "Forget the Twitch login and revoke its token."));
+
+            r.addChild(button("Create a Twitch app ↗", b -> Util.getPlatform().openUri("https://dev.twitch.tv/console/apps/create"),
+                    "Opens the Twitch developer console. Name: anything, OAuth Redirect URL: http://localhost, Category: Game Integration, Client Type: Public."));
+            r.addChild(button("Setup guide ↗", b -> Util.getPlatform().openUri("https://github.com/brayden-johnson/mc-twitch-chat#channel-point-redemptions"),
+                    "Step-by-step instructions on GitHub."));
+
+            r.addChild(label("Redemption colour"));
+            r.addChild(edit(work.redemptionColor, 40, v -> work.redemptionColor = v, "& code or #RRGGBB for redemption lines. Default &b (aqua)."));
+
+            rewardsLabel = new StringWidget(W * 2 + 10, 12, Component.literal(TwitchAuth.status()), font).alignLeft();
+            r.addChild(rewardsLabel, 2);
         }
     }
 

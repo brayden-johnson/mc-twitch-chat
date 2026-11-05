@@ -56,6 +56,53 @@ public final class Http {
         }
     }
 
+    public record Response(int status, String body) {
+        public boolean ok() {
+            return status / 100 == 2;
+        }
+
+        public JsonElement json() {
+            return JsonParser.parseString(body.isEmpty() ? "{}" : body);
+        }
+    }
+
+    /** Sends any request and returns the status and body without throwing on HTTP errors. */
+    public static Response send(String method, String url, java.util.Map<String, String> headers, String body, String contentType)
+            throws IOException {
+        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(url))
+                .timeout(Duration.ofSeconds(20))
+                .header("User-Agent", USER_AGENT);
+        if (headers != null) headers.forEach(b::header);
+        if (body != null) {
+            b.header("Content-Type", contentType);
+            b.method(method, HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
+        } else {
+            b.method(method, HttpRequest.BodyPublishers.noBody());
+        }
+        try {
+            HttpResponse<String> res = CLIENT.send(b.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            return new Response(res.statusCode(), res.body() == null ? "" : res.body());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted", e);
+        }
+    }
+
+    /** POST an application/x-www-form-urlencoded body. */
+    public static Response postForm(String url, java.util.Map<String, String> form) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        form.forEach((k, v) -> {
+            if (!sb.isEmpty()) sb.append('&');
+            sb.append(java.net.URLEncoder.encode(k, StandardCharsets.UTF_8)).append('=')
+                    .append(java.net.URLEncoder.encode(v, StandardCharsets.UTF_8));
+        });
+        return send("POST", url, null, sb.toString(), "application/x-www-form-urlencoded");
+    }
+
+    public static HttpClient client() {
+        return CLIENT;
+    }
+
     public static JsonElement getJson(String url) throws IOException {
         return JsonParser.parseString(new String(getBytes(url, "application/json"), StandardCharsets.UTF_8));
     }

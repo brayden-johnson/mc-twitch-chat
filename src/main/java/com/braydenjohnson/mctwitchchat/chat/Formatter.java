@@ -35,7 +35,9 @@ public final class Formatter {
         root.append(LegacyText.parse(cfg.prefix));
 
         if (line.notice() != null) {
-            root.append(Component.literal("✦ " + line.notice()).withStyle(ChatFormatting.GOLD));
+            Style noticeStyle = LegacyText.parseStyle(line.redemption() ? cfg.redemptionColor : cfg.noticeColor);
+            if (noticeStyle.getColor() == null) noticeStyle = noticeStyle.withColor(line.redemption() ? ChatFormatting.AQUA : ChatFormatting.GOLD);
+            root.append(Component.literal((line.redemption() ? "◆ " : "✦ ") + line.notice()).setStyle(noticeStyle));
             if (line.segments().isEmpty()) return root;
             root.append(Component.literal(" "));
         }

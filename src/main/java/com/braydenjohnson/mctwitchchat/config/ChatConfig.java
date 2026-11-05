@@ -61,6 +61,18 @@ public final class ChatConfig {
     /** How long a message may wait for its emote images before it is shown anyway. */
     public int maxWaitMs = 1500;
 
+    // --- Rewards
+    /** Show channel point redemptions (needs a Twitch login on the Rewards tab). */
+    public boolean showRedemptions = true;
+    /** Also show automatic rewards like "Unlock a Random Sub Emote" and celebrations. */
+    public boolean showAutomaticRewards = true;
+    /** Client ID of your own Twitch app (Client Type: Public). Not a secret. */
+    public String twitchClientId = "";
+    public String redemptionColor = "&b";
+    public String noticeColor = "&6";
+    /** Show "X is gifting 5 subs" once, then one line with every recipient. */
+    public boolean groupGiftBombs = true;
+
     // --- Filters
     public boolean hideCommands = false;
     /** Comma separated Twitch logins whose messages are never shown. */
@@ -137,6 +149,9 @@ public final class ChatConfig {
         ignoredUsers = nz(ignoredUsers);
         highlightWords = nz(highlightWords);
         highlightColor = nz(highlightColor);
+        twitchClientId = nz(twitchClientId).trim();
+        redemptionColor = nz(redemptionColor);
+        noticeColor = nz(noticeColor);
         if (nameColorMode == null) nameColorMode = NameColorMode.TWITCH;
         if (timestamps == null) timestamps = TimestampMode.OFF;
         emoteSize = Math.max(6, Math.min(18, emoteSize));

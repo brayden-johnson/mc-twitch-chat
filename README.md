@@ -7,6 +7,8 @@ A client-side NeoForge mod that shows your Twitch chat inside the normal Minecra
 - **FrankerFaceZ, BetterTTV and 7TV** emotes, both global and your channel's
 - **Emoji**, drawn as colour images (Twemoji)
 - Name colours, role badges (★ broadcaster, ⚔ mod, ♦ VIP, ✦ sub), sub and raid notices, and `/me` messages
+- **Channel point redemptions** (custom and Twitch's automatic rewards), after a one-time Twitch login
+- Gift subs show who gifted to whom, and gift bombs are grouped into one line listing every recipient
 - Messages a mod deletes, or from someone who gets timed out, are removed from Minecraft chat too
 
 Built for **Minecraft 1.21.1 / NeoForge 21.1.x**, which is what FTB Stoneblock 4 runs on. Only you need it: servers don't need the mod and can't tell you have it.
@@ -28,6 +30,7 @@ Open them with **Mods → MC Twitch Chat → Config**, with the `/streamchat` co
 | Connection | Channel, on/off, status messages, reconnect / disconnect |
 | Look | Prefix (with presets), separator, message colour, name colours (Twitch or fixed), brighten dark names, timestamps, badges, sub/raid notices, the coloured Twitch bar, `/me` italics |
 | Emotes | Twitch / FFZ / BTTV / 7TV / emoji on or off, Twitch GIFs on or off and their size (1 to 8 lines), animation on or off, emote size, how long to wait for images, reload emotes, clear the image cache |
+| Rewards | Channel point redemptions, automatic rewards, gift-bomb grouping, Twitch login, redemption colour, a test button |
 | Filters | Hide `!commands`, ignored users, mention highlighting, extra highlight words, highlight colour, ping sound, mod deletions |
 
 The prefix and colour fields use `&` codes: `&d` pink, `&5` purple, `&f` white, `&7` grey, `&l` bold, `&o` italic, `&r` reset, and `&#RRGGBB` for any colour. Examples:
@@ -36,6 +39,25 @@ The prefix and colour fields use `&` codes: `&d` pink, `&5` purple, `&f` white, 
 - `&5&l<&dstream&5&l>&r ` shows `<stream>` in purple and pink
 
 Settings are saved to `config/mctwitchchat.json`, so they persist across restarts. You can also edit that file by hand while the game is closed. Downloaded emote images are cached in `mctwitchchat-cache/`.
+
+## Channel point redemptions
+
+Most redemptions never reach Twitch chat; only rewards that ask for text show up there, and even those don't include the reward's name. To see every redemption, the mod needs to read them from Twitch directly, which takes a one-time login as your channel. Twitch only lets the channel owner read redemptions.
+
+1. **Make a Twitch app (once).** Go to [dev.twitch.tv/console/apps/create](https://dev.twitch.tv/console/apps/create), or click *Create a Twitch app* on the mod's Rewards tab, and fill in:
+   - **Name:** anything unique, e.g. `slayyyden MC Chat`
+   - **OAuth Redirect URLs:** `http://localhost` (it's required but not used)
+   - **Category:** Game Integration
+   - **Client Type:** **Public**
+
+   Click *Create*, then *Manage*, and copy the **Client ID**. It isn't a secret.
+2. **Paste the Client ID** into *Twitch app Client ID* on the Rewards tab.
+3. **Click *Log in with Twitch*.** Your browser opens twitch.tv/activate, and the code is also copied to your clipboard. Log in as your channel and approve. The mod only asks for `channel:read:redemptions`, so it can read redemptions but can't change anything.
+4. The status line at the bottom of the tab should say *listening for redemptions*. Use *Test redemption* to see how redemption lines look.
+
+The login is stored in `config/mctwitchchat-auth.json`, separate from the settings, and refreshes itself. If you don't use the mod for 30 days, Twitch makes you log in again. *Log out* deletes and revokes it.
+
+Without the login, rewards that ask for text still appear, as "*name* redeemed a reward: *text*".
 
 ## Commands
 
