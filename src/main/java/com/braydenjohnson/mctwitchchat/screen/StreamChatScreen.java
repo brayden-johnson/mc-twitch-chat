@@ -317,7 +317,7 @@ public class StreamChatScreen extends Screen {
             }, "Forget the Twitch login and revoke its token."));
 
             r.addChild(button("Create a Twitch app ↗", b -> Util.getPlatform().openUri("https://dev.twitch.tv/console/apps/create"),
-                    "Opens the Twitch developer console. Name: anything, OAuth Redirect URL: http://localhost, Category: Game Integration, Client Type: Public."));
+                    "Opens the Twitch developer console. Name: anything, OAuth Redirect URL: https://localhost (any HTTPS URL; it is never used), Category: Game Integration, Client Type: Public."));
             r.addChild(button("Setup guide ↗", b -> Util.getPlatform().openUri("https://github.com/brayden-johnson/mc-twitch-chat#channel-point-redemptions"),
                     "Step-by-step instructions on GitHub."));
 

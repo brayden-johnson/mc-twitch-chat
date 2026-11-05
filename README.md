@@ -46,7 +46,7 @@ Most redemptions never reach Twitch chat; only rewards that ask for text show up
 
 1. **Make a Twitch app (once).** Go to [dev.twitch.tv/console/apps/create](https://dev.twitch.tv/console/apps/create), or click *Create a Twitch app* on the mod's Rewards tab, and fill in:
    - **Name:** anything unique, e.g. `slayyyden MC Chat`
-   - **OAuth Redirect URLs:** `http://localhost` (it's required but not used)
+   - **OAuth Redirect URLs:** `https://localhost` (required, but never used: device login doesn't redirect. Any HTTPS URL works)
    - **Category:** Game Integration
    - **Client Type:** **Public**
 
