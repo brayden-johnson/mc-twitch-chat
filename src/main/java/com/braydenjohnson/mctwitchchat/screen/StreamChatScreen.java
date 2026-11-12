@@ -1,6 +1,7 @@
 package com.braydenjohnson.mctwitchchat.screen;
 
 import com.braydenjohnson.mctwitchchat.chat.ChatLine;
+import com.braydenjohnson.mctwitchchat.chat.ChatSounds;
 import com.braydenjohnson.mctwitchchat.chat.Formatter;
 import com.braydenjohnson.mctwitchchat.chat.MessageParser;
 import com.braydenjohnson.mctwitchchat.chat.StreamChatManager;
@@ -66,7 +67,7 @@ public class StreamChatScreen extends Screen {
     @Override
     protected void init() {
         tabBar = TabNavigationBar.builder(tabManager, width)
-                .addTabs(new ConnectionTab(), new LookTab(), new EmotesTab(), new RewardsTab(), new FiltersTab())
+                .addTabs(new ConnectionTab(), new LookTab(), new EmotesTab(), new RewardsTab(), new SoundsTab(), new FiltersTab())
                 .build();
         addRenderableWidget(tabBar);
 
@@ -327,6 +328,67 @@ public class StreamChatScreen extends Screen {
             rewardsLabel = new StringWidget(W * 2 + 10, 12, Component.literal(TwitchAuth.status()), font).alignLeft();
             r.addChild(rewardsLabel, 2);
         }
+    }
+
+    private final class SoundsTab extends GridLayoutTab {
+        SoundsTab() {
+            super(Component.literal("Sounds"));
+            GridLayout.RowHelper r = rows(layout);
+
+            r.addChild(toggle("Chat sound", work.chatSound, v -> work.chatSound = v,
+                    "Play a sound when a chat message arrives."));
+            r.addChild(soundPicker(work.chatSoundId, id -> {
+                work.chatSoundId = id;
+                ChatSounds.play(id, work.chatSoundVolume, work.chatSoundPitch);
+            }));
+            IntSlider chatWindow = new IntSlider("Quiet window", 0, 60, 1, work.chatSoundWindow, v -> work.chatSoundWindow = v,
+                    v -> v == 0 ? "every message" : v + "s");
+            chatWindow.setTooltip(Tooltip.create(Component.literal(
+                    "Only play the sound if chat was quiet this long. Every message restarts the timer, "
+                            + "so a burst of messages makes one sound. 0 = every message.")));
+            r.addChild(chatWindow);
+            r.addChild(toggle("Skip my messages", work.chatSoundSkipOwn, v -> work.chatSoundSkipOwn = v,
+                    "No sound for messages you send from your own channel account, and they don't restart the quiet window."));
+            r.addChild(new IntSlider("Volume", 0, 100, 5, work.chatSoundVolume, v -> work.chatSoundVolume = v, v -> v + "%"));
+            r.addChild(new IntSlider("Pitch", 50, 200, 5, work.chatSoundPitch, v -> work.chatSoundPitch = v, v -> v + "%"));
+
+            r.addChild(toggle("Redemption sound", work.redemptionSound, v -> work.redemptionSound = v,
+                    "Play a different sound for channel point redemptions."));
+            r.addChild(soundPicker(work.redemptionSoundId, id -> {
+                work.redemptionSoundId = id;
+                ChatSounds.play(id, work.redemptionSoundVolume, work.redemptionSoundPitch);
+            }));
+            IntSlider redeemWindow = new IntSlider("Quiet window", 0, 60, 1, work.redemptionSoundWindow,
+                    v -> work.redemptionSoundWindow = v, v -> v == 0 ? "every one" : v + "s");
+            redeemWindow.setTooltip(Tooltip.create(Component.literal(
+                    "Same as for chat, with its own timer: only play if there was no redemption this long. 0 = every redemption.")));
+            r.addChild(redeemWindow);
+            r.addChild(new IntSlider("Volume", 0, 100, 5, work.redemptionSoundVolume, v -> work.redemptionSoundVolume = v, v -> v + "%"));
+            r.addChild(new IntSlider("Pitch", 50, 200, 5, work.redemptionSoundPitch, v -> work.redemptionSoundPitch = v, v -> v + "%"));
+            r.addChild(button("Test both", b -> {
+                ChatSounds.play(work.chatSoundId, work.chatSoundVolume, work.chatSoundPitch);
+                net.minecraft.Util.backgroundExecutor().execute(() -> {
+                    try {
+                        Thread.sleep(700);
+                    } catch (InterruptedException ignored) {
+                    }
+                    ChatSounds.play(work.redemptionSoundId, work.redemptionSoundVolume, work.redemptionSoundPitch);
+                });
+            }, "Plays the chat sound, then the redemption sound, with the volume and pitch set here."));
+        }
+    }
+
+    /** Cycles through the preset sounds (keeping a custom ID from the config file as an extra choice). */
+    private CycleButton<String> soundPicker(String current, Consumer<String> onChange) {
+        List<String> ids = new java.util.ArrayList<>(ChatSounds.PRESETS.keySet());
+        if (!ids.contains(current)) ids.add(0, current);
+        CycleButton<String> b = CycleButton.<String>builder(id -> Component.literal(ChatSounds.label(id)))
+                .withValues(ids)
+                .withInitialValue(current)
+                .create(0, 0, W, 20, Component.literal("Sound"), (btn, v) -> onChange.accept(v));
+        b.setTooltip(Tooltip.create(Component.literal(
+                "Click to hear the next sound. Any sound ID (including modded ones) can be set in config/mctwitchchat.json; it shows here as Custom.")));
+        return b;
     }
 
     private final class FiltersTab extends GridLayoutTab {

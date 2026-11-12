@@ -73,6 +73,26 @@ public final class ChatConfig {
     /** Show "X is gifting 5 subs" once, then one line with every recipient. */
     public boolean groupGiftBombs = true;
 
+    // --- Sounds
+    public boolean chatSound = false;
+    public String chatSoundId = "minecraft:block.note_block.bell";
+    public int chatSoundVolume = 60;
+    /** 100 = normal pitch. */
+    public int chatSoundPitch = 100;
+    /**
+     * Rolling quiet window in seconds: the chat sound only plays if chat was silent this long.
+     * Every message restarts the window, so a busy burst makes one sound. 0 = every message.
+     */
+    public int chatSoundWindow = 5;
+    /** Don't play the chat sound for your own messages (and don't let them restart the window). */
+    public boolean chatSoundSkipOwn = true;
+    public boolean redemptionSound = false;
+    public String redemptionSoundId = "minecraft:block.amethyst_block.chime";
+    public int redemptionSoundVolume = 80;
+    public int redemptionSoundPitch = 100;
+    /** Same rolling window, separate timer, for redemptions. 0 = every redemption. */
+    public int redemptionSoundWindow = 0;
+
     // --- Filters
     public boolean hideCommands = false;
     /** Comma separated Twitch logins whose messages are never shown. */
@@ -157,6 +177,16 @@ public final class ChatConfig {
         emoteSize = Math.max(6, Math.min(18, emoteSize));
         maxWaitMs = Math.max(0, Math.min(5000, maxWaitMs));
         gifLines = Math.max(1, Math.min(8, gifLines));
+        chatSoundId = nz(chatSoundId).trim();
+        if (chatSoundId.isEmpty()) chatSoundId = "minecraft:block.note_block.bell";
+        redemptionSoundId = nz(redemptionSoundId).trim();
+        if (redemptionSoundId.isEmpty()) redemptionSoundId = "minecraft:block.amethyst_block.chime";
+        chatSoundVolume = Math.max(0, Math.min(100, chatSoundVolume));
+        redemptionSoundVolume = Math.max(0, Math.min(100, redemptionSoundVolume));
+        chatSoundPitch = Math.max(50, Math.min(200, chatSoundPitch));
+        redemptionSoundPitch = Math.max(50, Math.min(200, redemptionSoundPitch));
+        chatSoundWindow = Math.max(0, Math.min(120, chatSoundWindow));
+        redemptionSoundWindow = Math.max(0, Math.min(120, redemptionSoundWindow));
     }
 
     /** Accepts "slayyyden", "#slayyyden", "@slayyyden" or a twitch.tv link. */

@@ -66,6 +66,10 @@ public final class StreamChatManager {
     }
 
     private final Map<String, GiftBomb> bombs = new ConcurrentHashMap<>();
+
+    // Render thread only: when the last chat message / redemption arrived, for the quiet windows.
+    private long lastChatAt = Long.MIN_VALUE / 2;
+    private long lastRedemptionAt = Long.MIN_VALUE / 2;
     private volatile String status = "Not connected";
     private volatile boolean paused;
     private final Object chainLock = new Object();
@@ -469,8 +473,35 @@ public final class StreamChatManager {
             sigs.forEach(d::addLast);
             while (d.size() > 40) d.removeFirst();
         }
+        boolean pinged = false;
         if (line.highlight() && cfg.pingSound) {
             mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.EXPERIENCE_ORB_PICKUP, 1.4f));
+            pinged = true;
+        }
+        playNotificationSound(cfg, line, pinged);
+    }
+
+    /**
+     * Chat and redemption sounds with a rolling quiet window: a sound plays only if nothing
+     * of that kind arrived within the window, and every arrival restarts it.
+     */
+    private void playNotificationSound(ChatConfig cfg, ChatLine line, boolean alreadyPinged) {
+        long now = net.minecraft.Util.getMillis();
+        if (line.redemption()) {
+            boolean quiet = now - lastRedemptionAt >= cfg.redemptionSoundWindow * 1000L;
+            lastRedemptionAt = now;
+            if (cfg.redemptionSound && quiet) {
+                ChatSounds.play(cfg.redemptionSoundId, cfg.redemptionSoundVolume, cfg.redemptionSoundPitch);
+            }
+            return;
+        }
+        boolean own = !line.login().isEmpty() && line.login().equalsIgnoreCase(cfg.channel);
+        if (own && cfg.chatSoundSkipOwn) return;
+        boolean quiet = now - lastChatAt >= cfg.chatSoundWindow * 1000L;
+        lastChatAt = now;
+        // A highlight ping already made a sound for this message.
+        if (cfg.chatSound && quiet && !alreadyPinged) {
+            ChatSounds.play(cfg.chatSoundId, cfg.chatSoundVolume, cfg.chatSoundPitch);
         }
     }
 
