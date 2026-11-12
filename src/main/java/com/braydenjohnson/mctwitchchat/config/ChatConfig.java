@@ -86,6 +86,10 @@ public final class ChatConfig {
     public int chatSoundWindow = 5;
     /** Don't play the chat sound for your own messages (and don't let them restart the window). */
     public boolean chatSoundSkipOwn = true;
+    /** Mentions and highlight words (the "ping"). The on/off switch is pingSound. */
+    public String pingSoundId = "minecraft:entity.experience_orb.pickup";
+    public int pingSoundVolume = 100;
+    public int pingSoundPitch = 140;
     public boolean redemptionSound = false;
     public String redemptionSoundId = "minecraft:block.amethyst_block.chime";
     public int redemptionSoundVolume = 80;
@@ -181,6 +185,10 @@ public final class ChatConfig {
         if (chatSoundId.isEmpty()) chatSoundId = "minecraft:block.note_block.bell";
         redemptionSoundId = nz(redemptionSoundId).trim();
         if (redemptionSoundId.isEmpty()) redemptionSoundId = "minecraft:block.amethyst_block.chime";
+        pingSoundId = nz(pingSoundId).trim();
+        if (pingSoundId.isEmpty()) pingSoundId = "minecraft:entity.experience_orb.pickup";
+        pingSoundVolume = Math.max(0, Math.min(100, pingSoundVolume));
+        pingSoundPitch = Math.max(50, Math.min(200, pingSoundPitch));
         chatSoundVolume = Math.max(0, Math.min(100, chatSoundVolume));
         redemptionSoundVolume = Math.max(0, Math.min(100, redemptionSoundVolume));
         chatSoundPitch = Math.max(50, Math.min(200, chatSoundPitch));

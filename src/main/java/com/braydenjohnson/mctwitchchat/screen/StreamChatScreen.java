@@ -57,6 +57,9 @@ public class StreamChatScreen extends Screen {
     private StringWidget emoteLabel;
     private StringWidget rewardsLabel;
     private int previewTop;
+    /** Tab to show after init (kept when coming back from the sound picker). */
+    private int tabBarSelect;
+    private final List<net.minecraft.client.gui.components.tabs.Tab> tabs = new java.util.ArrayList<>();
 
     public StreamChatScreen(Screen parent) {
         super(Component.literal("MC Twitch Chat"));
@@ -66,8 +69,10 @@ public class StreamChatScreen extends Screen {
 
     @Override
     protected void init() {
+        tabs.clear();
+        tabs.addAll(List.of(new ConnectionTab(), new LookTab(), new EmotesTab(), new RewardsTab(), new SoundsTab(), new FiltersTab()));
         tabBar = TabNavigationBar.builder(tabManager, width)
-                .addTabs(new ConnectionTab(), new LookTab(), new EmotesTab(), new RewardsTab(), new SoundsTab(), new FiltersTab())
+                .addTabs(tabs.toArray(new net.minecraft.client.gui.components.tabs.Tab[0]))
                 .build();
         addRenderableWidget(tabBar);
 
@@ -76,7 +81,7 @@ public class StreamChatScreen extends Screen {
         footer.addChild(Button.builder(CommonComponents.GUI_CANCEL, b -> minecraft.setScreen(parent)).width(W).build());
         footer.visitWidgets(this::addRenderableWidget);
 
-        tabBar.selectTab(0, false);
+        tabBar.selectTab(Math.max(0, Math.min(tabs.size() - 1, tabBarSelect)), false);
         repositionElements();
     }
 
@@ -125,6 +130,11 @@ public class StreamChatScreen extends Screen {
         return Formatter.format(work, line);
     }
 
+    private void rememberTab() {
+        int i = tabs.indexOf(tabManager.getCurrentTab());
+        if (i >= 0) tabBarSelect = i;
+    }
+
     private void saveAndClose() {
         ChatConfig.set(work);
         ChatConfig.save();
@@ -153,8 +163,12 @@ public class StreamChatScreen extends Screen {
     }
 
     private CycleButton<Boolean> toggle(String name, boolean value, Consumer<Boolean> onChange, String tooltip) {
+        return toggle(name, value, onChange, tooltip, W);
+    }
+
+    private CycleButton<Boolean> toggle(String name, boolean value, Consumer<Boolean> onChange, String tooltip, int width) {
         CycleButton<Boolean> b = CycleButton.onOffBuilder(value)
-                .create(0, 0, W, 20, Component.literal(name), (btn, v) -> onChange.accept(v));
+                .create(0, 0, width, 20, Component.literal(name), (btn, v) -> onChange.accept(v));
         b.setTooltip(Tooltip.create(Component.literal(tooltip)));
         return b;
     }
@@ -331,64 +345,85 @@ public class StreamChatScreen extends Screen {
     }
 
     private final class SoundsTab extends GridLayoutTab {
+        private static final int C = 100;
+
         SoundsTab() {
             super(Component.literal("Sounds"));
-            GridLayout.RowHelper r = rows(layout);
+            layout.rowSpacing(3).columnSpacing(6);
+            GridLayout.RowHelper r = layout.createRowHelper(4);
 
-            r.addChild(toggle("Chat sound", work.chatSound, v -> work.chatSound = v,
-                    "Play a sound when a chat message arrives."));
-            r.addChild(soundPicker(work.chatSoundId, id -> {
-                work.chatSoundId = id;
-                ChatSounds.play(id, work.chatSoundVolume, work.chatSoundPitch);
-            }));
-            IntSlider chatWindow = new IntSlider("Quiet window", 0, 60, 1, work.chatSoundWindow, v -> work.chatSoundWindow = v,
-                    v -> v == 0 ? "every message" : v + "s");
-            chatWindow.setTooltip(Tooltip.create(Component.literal(
-                    "Only play the sound if chat was quiet this long. Every message restarts the timer, "
-                            + "so a burst of messages makes one sound. 0 = every message.")));
-            r.addChild(chatWindow);
-            r.addChild(toggle("Skip my messages", work.chatSoundSkipOwn, v -> work.chatSoundSkipOwn = v,
-                    "No sound for messages you send from your own channel account, and they don't restart the quiet window."));
-            r.addChild(new IntSlider("Volume", 0, 100, 5, work.chatSoundVolume, v -> work.chatSoundVolume = v, v -> v + "%"));
-            r.addChild(new IntSlider("Pitch", 50, 200, 5, work.chatSoundPitch, v -> work.chatSoundPitch = v, v -> v + "%"));
+            // ---- Chat messages
+            r.addChild(header("Chat messages", "A sound when stream chat gets a new message."), 4);
+            r.addChild(toggle("Sound", work.chatSound, v -> work.chatSound = v, "Play a sound for new chat messages.", C));
+            r.addChild(pickerButton("Chat message sound", () -> work.chatSoundId, id -> work.chatSoundId = id,
+                    () -> work.chatSoundVolume, () -> work.chatSoundPitch));
+            r.addChild(toggle("Skip mine", work.chatSoundSkipOwn, v -> work.chatSoundSkipOwn = v,
+                    "No sound for messages you send from your own channel account, and they don't restart the quiet window.", C));
+            r.addChild(testButton(() -> ChatSounds.play(work.chatSoundId, work.chatSoundVolume, work.chatSoundPitch)));
+            r.addChild(windowSlider(work.chatSoundWindow, v -> work.chatSoundWindow = v, "message"));
+            r.addChild(new IntSlider("Volume", 0, 100, 5, work.chatSoundVolume, v -> work.chatSoundVolume = v, v -> v + "%", C));
+            r.addChild(new IntSlider("Pitch", 50, 200, 5, work.chatSoundPitch, v -> work.chatSoundPitch = v, v -> v + "%", C));
+            r.addChild(new StringWidget(C, 20, Component.empty(), font));
 
-            r.addChild(toggle("Redemption sound", work.redemptionSound, v -> work.redemptionSound = v,
-                    "Play a different sound for channel point redemptions."));
-            r.addChild(soundPicker(work.redemptionSoundId, id -> {
-                work.redemptionSoundId = id;
-                ChatSounds.play(id, work.redemptionSoundVolume, work.redemptionSoundPitch);
-            }));
-            IntSlider redeemWindow = new IntSlider("Quiet window", 0, 60, 1, work.redemptionSoundWindow,
-                    v -> work.redemptionSoundWindow = v, v -> v == 0 ? "every one" : v + "s");
-            redeemWindow.setTooltip(Tooltip.create(Component.literal(
-                    "Same as for chat, with its own timer: only play if there was no redemption this long. 0 = every redemption.")));
-            r.addChild(redeemWindow);
-            r.addChild(new IntSlider("Volume", 0, 100, 5, work.redemptionSoundVolume, v -> work.redemptionSoundVolume = v, v -> v + "%"));
-            r.addChild(new IntSlider("Pitch", 50, 200, 5, work.redemptionSoundPitch, v -> work.redemptionSoundPitch = v, v -> v + "%"));
-            r.addChild(button("Test both", b -> {
-                ChatSounds.play(work.chatSoundId, work.chatSoundVolume, work.chatSoundPitch);
-                net.minecraft.Util.backgroundExecutor().execute(() -> {
-                    try {
-                        Thread.sleep(700);
-                    } catch (InterruptedException ignored) {
-                    }
-                    ChatSounds.play(work.redemptionSoundId, work.redemptionSoundVolume, work.redemptionSoundPitch);
-                });
-            }, "Plays the chat sound, then the redemption sound, with the volume and pitch set here."));
+            // ---- Mentions & highlight words
+            r.addChild(header("Mentions & highlight words",
+                    "Plays instead of the chat sound when a message mentions you or contains a highlight word (Filters tab)."), 4);
+            r.addChild(toggle("Sound", work.pingSound, v -> work.pingSound = v, "Play a sound for highlighted messages.", C));
+            r.addChild(pickerButton("Mention sound", () -> work.pingSoundId, id -> work.pingSoundId = id,
+                    () -> work.pingSoundVolume, () -> work.pingSoundPitch));
+            r.addChild(new IntSlider("Volume", 0, 100, 5, work.pingSoundVolume, v -> work.pingSoundVolume = v, v -> v + "%", C));
+            r.addChild(testButton(() -> ChatSounds.play(work.pingSoundId, work.pingSoundVolume, work.pingSoundPitch)));
+            r.addChild(new IntSlider("Pitch", 50, 200, 5, work.pingSoundPitch, v -> work.pingSoundPitch = v, v -> v + "%", C));
+            r.addChild(new StringWidget(C * 3 + 12, 20, Component.empty(), font), 3);
+
+            // ---- Channel point redemptions
+            r.addChild(header("Channel point redemptions", "A separate sound for redemptions (needs the Twitch login on the Rewards tab)."), 4);
+            r.addChild(toggle("Sound", work.redemptionSound, v -> work.redemptionSound = v, "Play a sound for channel point redemptions.", C));
+            r.addChild(pickerButton("Redemption sound", () -> work.redemptionSoundId, id -> work.redemptionSoundId = id,
+                    () -> work.redemptionSoundVolume, () -> work.redemptionSoundPitch));
+            r.addChild(new StringWidget(C, 20, Component.empty(), font));
+            r.addChild(testButton(() -> ChatSounds.play(work.redemptionSoundId, work.redemptionSoundVolume, work.redemptionSoundPitch)));
+            r.addChild(windowSlider(work.redemptionSoundWindow, v -> work.redemptionSoundWindow = v, "redemption"));
+            r.addChild(new IntSlider("Volume", 0, 100, 5, work.redemptionSoundVolume, v -> work.redemptionSoundVolume = v, v -> v + "%", C));
+            r.addChild(new IntSlider("Pitch", 50, 200, 5, work.redemptionSoundPitch, v -> work.redemptionSoundPitch = v, v -> v + "%", C));
         }
-    }
 
-    /** Cycles through the preset sounds (keeping a custom ID from the config file as an extra choice). */
-    private CycleButton<String> soundPicker(String current, Consumer<String> onChange) {
-        List<String> ids = new java.util.ArrayList<>(ChatSounds.PRESETS.keySet());
-        if (!ids.contains(current)) ids.add(0, current);
-        CycleButton<String> b = CycleButton.<String>builder(id -> Component.literal(ChatSounds.label(id)))
-                .withValues(ids)
-                .withInitialValue(current)
-                .create(0, 0, W, 20, Component.literal("Sound"), (btn, v) -> onChange.accept(v));
-        b.setTooltip(Tooltip.create(Component.literal(
-                "Click to hear the next sound. Any sound ID (including modded ones) can be set in config/mctwitchchat.json; it shows here as Custom.")));
-        return b;
+        private StringWidget header(String text, String tooltip) {
+            StringWidget w = new StringWidget(C * 4 + 18, 12, Component.literal(text).withStyle(ChatFormatting.GOLD), font).alignLeft();
+            w.setTooltip(Tooltip.create(Component.literal(tooltip)));
+            return w;
+        }
+
+        private Button testButton(Runnable play) {
+            Button b = Button.builder(Component.literal("▶ Test"), btn -> play.run()).width(C).build();
+            b.setTooltip(Tooltip.create(Component.literal("Play this sound with the volume and pitch set here.")));
+            return b;
+        }
+
+        private IntSlider windowSlider(int value, IntConsumer setter, String what) {
+            IntSlider s = new IntSlider("Quiet", 0, 60, 1, value, setter, v -> v == 0 ? "off" : v + "s", C);
+            s.setTooltip(Tooltip.create(Component.literal(
+                    "Quiet window: only play if there was no " + what + " for this many seconds. Every " + what
+                            + " restarts the timer, so a burst makes one sound. Off = every " + what + ".")));
+            return s;
+        }
+
+        private Button pickerButton(String title, java.util.function.Supplier<String> get, Consumer<String> set,
+                                    java.util.function.IntSupplier volume, java.util.function.IntSupplier pitch) {
+            Button b = Button.builder(Component.literal("♪ " + ChatSounds.label(get.get())), btn -> {
+                rememberTab();
+                minecraft.setScreen(new SoundPickerScreen(StreamChatScreen.this, title, get.get(),
+                        volume.getAsInt(), pitch.getAsInt(), id -> {
+                            set.accept(id);
+                            // The screen may come back without rebuilding its widgets, so update this button now.
+                            btn.setMessage(Component.literal("♪ " + ChatSounds.label(id)));
+                            btn.setTooltip(Tooltip.create(Component.literal("Sound: " + id
+                                    + "\nClick to choose from every sound in the game, including modded ones.")));
+                        }));
+            }).width(C).build();
+            b.setTooltip(Tooltip.create(Component.literal("Sound: " + get.get() + "\nClick to choose from every sound in the game, including modded ones.")));
+            return b;
+        }
     }
 
     private final class FiltersTab extends GridLayoutTab {
@@ -404,8 +439,8 @@ public class StreamChatScreen extends Screen {
                     "Comma separated logins to hide, e.g. nightbot, streamelements"));
             r.addChild(toggle("Highlight mentions", work.highlightMentions, v -> work.highlightMentions = v,
                     "Highlight messages that mention your channel name."));
-            r.addChild(toggle("Ping sound", work.pingSound, v -> work.pingSound = v,
-                    "Play a small sound for highlighted messages."));
+            r.addChild(button("Mention sound…", b -> tabBar.selectTab(tabs.size() - 2, true),
+                    "The sound for highlighted messages is set on the Sounds tab."));
             r.addChild(label("Highlight words"));
             r.addChild(edit(work.highlightWords, 500, v -> work.highlightWords = v,
                     "Comma separated extra words that highlight a message."));
@@ -425,7 +460,11 @@ public class StreamChatScreen extends Screen {
         private final IntFunction<String> format;
 
         IntSlider(String label, int min, int max, int step, int value, IntConsumer setter, IntFunction<String> format) {
-            super(0, 0, W, 20, Component.empty(), (Math.max(min, Math.min(max, value)) - min) / (double) (max - min));
+            this(label, min, max, step, value, setter, format, W);
+        }
+
+        IntSlider(String label, int min, int max, int step, int value, IntConsumer setter, IntFunction<String> format, int width) {
+            super(0, 0, width, 20, Component.empty(), (Math.max(min, Math.min(max, value)) - min) / (double) (max - min));
             this.label = label;
             this.min = min;
             this.max = max;

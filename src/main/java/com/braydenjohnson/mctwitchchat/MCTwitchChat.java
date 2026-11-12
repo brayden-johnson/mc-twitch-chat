@@ -44,6 +44,11 @@ public final class MCTwitchChat {
         });
         NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, event -> onTick());
         NeoForge.EVENT_BUS.addListener(RegisterClientCommandsEvent.class, MCTwitchChat::registerCommands);
+        // Remember sounds as they play, for the sound picker's "Heard recently" list (like Sound Muffler).
+        NeoForge.EVENT_BUS.addListener(net.neoforged.neoforge.client.event.sound.PlaySoundEvent.class, event -> {
+            var sound = event.getOriginalSound();
+            if (sound != null) com.braydenjohnson.mctwitchchat.chat.ChatSounds.heard(sound.getLocation().toString());
+        });
     }
 
     private static void onTick() {

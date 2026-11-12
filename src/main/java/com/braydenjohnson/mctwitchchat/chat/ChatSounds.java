@@ -29,14 +29,59 @@ public final class ChatSounds {
         PRESETS.put("minecraft:entity.cat.purr", "Cat purr");
         PRESETS.put("minecraft:entity.player.levelup", "Level up");
         PRESETS.put("minecraft:ui.button.click", "Click");
+        PRESETS.put("minecraft:block.note_block.bit", "Bit (8-bit)");
+        PRESETS.put("minecraft:block.note_block.flute", "Flute");
+        PRESETS.put("minecraft:block.note_block.guitar", "Guitar");
+        PRESETS.put("minecraft:block.note_block.banjo", "Banjo");
+        PRESETS.put("minecraft:block.note_block.cow_bell", "Cow bell");
+        PRESETS.put("minecraft:block.note_block.didgeridoo", "Didgeridoo");
+        PRESETS.put("minecraft:block.bell.use", "Village bell");
+        PRESETS.put("minecraft:entity.arrow.hit_player", "Ding");
+        PRESETS.put("minecraft:ui.toast.in", "Toast");
+        PRESETS.put("minecraft:entity.allay.ambient_without_item", "Allay");
+        PRESETS.put("minecraft:entity.parrot.ambient", "Parrot");
+        PRESETS.put("minecraft:entity.villager.yes", "Villager hmm");
+        PRESETS.put("minecraft:entity.chicken.egg", "Egg plop");
+        PRESETS.put("minecraft:block.bubble_column.bubble_pop", "Bubble pop");
+        PRESETS.put("minecraft:entity.firework_rocket.twinkle", "Twinkle");
+        PRESETS.put("minecraft:block.enchantment_table.use", "Enchant");
+        PRESETS.put("minecraft:block.beacon.activate", "Beacon");
+        PRESETS.put("minecraft:block.copper_bulb.turn_on", "Copper bulb");
+        PRESETS.put("minecraft:block.vault.activate", "Vault");
+        PRESETS.put("minecraft:entity.puffer_fish.blow_up", "Pufferfish");
+    }
+
+    /** Sounds the game played recently, newest first, for the picker's "Heard recently" filter. */
+    private static final java.util.LinkedHashMap<String, Long> RECENT = new java.util.LinkedHashMap<>();
+
+    public static void heard(String id) {
+        synchronized (RECENT) {
+            RECENT.remove(id);
+            RECENT.put(id, System.currentTimeMillis());
+            if (RECENT.size() > 200) {
+                String eldest = RECENT.keySet().iterator().next();
+                RECENT.remove(eldest);
+            }
+        }
+    }
+
+    public static java.util.List<String> recent() {
+        synchronized (RECENT) {
+            java.util.List<String> list = new java.util.ArrayList<>(RECENT.keySet());
+            java.util.Collections.reverse(list);
+            return list;
+        }
     }
 
     private ChatSounds() {
     }
 
+    /** Friendly name for presets, otherwise the short form of the ID ("block.anvil.land"). */
     public static String label(String id) {
         String name = PRESETS.get(id);
-        return name != null ? name : "Custom";
+        if (name != null) return name;
+        if (id == null) return "None";
+        return id.startsWith("minecraft:") ? id.substring("minecraft:".length()) : id;
     }
 
     /** True if the text is a usable sound ID like "minecraft:block.note_block.bell". */

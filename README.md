@@ -32,7 +32,7 @@ Open them with **Mods → MC Twitch Chat → Config**, with the `/streamchat` co
 | Look | Prefix (with presets), separator, message colour, name colours (Twitch or fixed), brighten dark names, timestamps, badges, sub/raid notices, the coloured Twitch bar, `/me` italics |
 | Emotes | Twitch / FFZ / BTTV / 7TV / emoji on or off, Twitch GIFs on or off and their size (1 to 8 lines), animation on or off, emote size, how long to wait for images, reload emotes, clear the image cache |
 | Rewards | Channel point redemptions, automatic rewards, gift-bomb grouping, Twitch login, redemption colour, a test button |
-| Sounds | Separate chat and redemption sounds: on/off, which sound, volume, pitch, and a rolling quiet window (a sound plays only after that many seconds without a new message, so a burst makes one sound). Optionally skip your own messages |
+| Sounds | Three sections: chat messages, mentions & highlight words, and redemptions. Each has on/off, a sound picker (search every sound in the game, including modded ones, filter to suggested or recently heard sounds, click to preview), volume, pitch and a test button. Chat and redemptions also have a rolling quiet window: a sound plays only after that many seconds without a new one, so a burst makes one sound. Chat can skip your own messages |
 | Filters | Hide `!commands`, ignored users, mention highlighting, extra highlight words, highlight colour, ping sound, mod deletions |
 
 The prefix and colour fields use `&` codes: `&d` pink, `&5` purple, `&f` white, `&7` grey, `&l` bold, `&o` italic, `&r` reset, and `&#RRGGBB` for any colour. Examples:

@@ -475,7 +475,7 @@ public final class StreamChatManager {
         }
         boolean pinged = false;
         if (line.highlight() && cfg.pingSound) {
-            mc.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.EXPERIENCE_ORB_PICKUP, 1.4f));
+            ChatSounds.play(cfg.pingSoundId, cfg.pingSoundVolume, cfg.pingSoundPitch);
             pinged = true;
         }
         playNotificationSound(cfg, line, pinged);
