@@ -345,51 +345,55 @@ public class StreamChatScreen extends Screen {
     }
 
     private final class SoundsTab extends GridLayoutTab {
-        private static final int C = 100;
+        /** Column width: five columns fit a 1024-px-wide window at GUI scale 2. */
+        private static final int C = 94;
 
         SoundsTab() {
             super(Component.literal("Sounds"));
             layout.rowSpacing(3).columnSpacing(6);
-            GridLayout.RowHelper r = layout.createRowHelper(4);
+            GridLayout.RowHelper r = layout.createRowHelper(5);
 
-            // ---- Chat messages
-            r.addChild(header("Chat messages", "A sound when stream chat gets a new message."), 4);
+            // Every section uses the same first row: On · Sound · Volume · Pitch · Test.
+            // Extra options go on a second row, left-aligned.
+
+            r.addChild(header("Chat messages", "A sound when stream chat gets a new message."), 5);
             r.addChild(toggle("Sound", work.chatSound, v -> work.chatSound = v, "Play a sound for new chat messages.", C));
             r.addChild(pickerButton("Chat message sound", () -> work.chatSoundId, id -> work.chatSoundId = id,
                     () -> work.chatSoundVolume, () -> work.chatSoundPitch));
-            r.addChild(toggle("Skip mine", work.chatSoundSkipOwn, v -> work.chatSoundSkipOwn = v,
-                    "No sound for messages you send from your own channel account, and they don't restart the quiet window.", C));
-            r.addChild(testButton(() -> ChatSounds.play(work.chatSoundId, work.chatSoundVolume, work.chatSoundPitch)));
-            r.addChild(windowSlider(work.chatSoundWindow, v -> work.chatSoundWindow = v, "message"));
             r.addChild(new IntSlider("Volume", 0, 100, 5, work.chatSoundVolume, v -> work.chatSoundVolume = v, v -> v + "%", C));
             r.addChild(new IntSlider("Pitch", 50, 200, 5, work.chatSoundPitch, v -> work.chatSoundPitch = v, v -> v + "%", C));
-            r.addChild(new StringWidget(C, 20, Component.empty(), font));
+            r.addChild(testButton(() -> ChatSounds.play(work.chatSoundId, work.chatSoundVolume, work.chatSoundPitch)));
+            r.addChild(windowSlider(work.chatSoundWindow, v -> work.chatSoundWindow = v, "message"));
+            r.addChild(toggle("Skip mine", work.chatSoundSkipOwn, v -> work.chatSoundSkipOwn = v,
+                    "No sound for messages you send from your own channel account, and they don't restart the quiet window.", C));
+            r.addChild(spacer(3), 3);
 
-            // ---- Mentions & highlight words
             r.addChild(header("Mentions & highlight words",
-                    "Plays instead of the chat sound when a message mentions you or contains a highlight word (Filters tab)."), 4);
+                    "Plays instead of the chat sound when a message mentions you or contains a highlight word (Filters tab)."), 5);
             r.addChild(toggle("Sound", work.pingSound, v -> work.pingSound = v, "Play a sound for highlighted messages.", C));
             r.addChild(pickerButton("Mention sound", () -> work.pingSoundId, id -> work.pingSoundId = id,
                     () -> work.pingSoundVolume, () -> work.pingSoundPitch));
             r.addChild(new IntSlider("Volume", 0, 100, 5, work.pingSoundVolume, v -> work.pingSoundVolume = v, v -> v + "%", C));
-            r.addChild(testButton(() -> ChatSounds.play(work.pingSoundId, work.pingSoundVolume, work.pingSoundPitch)));
             r.addChild(new IntSlider("Pitch", 50, 200, 5, work.pingSoundPitch, v -> work.pingSoundPitch = v, v -> v + "%", C));
-            r.addChild(new StringWidget(C * 3 + 12, 20, Component.empty(), font), 3);
+            r.addChild(testButton(() -> ChatSounds.play(work.pingSoundId, work.pingSoundVolume, work.pingSoundPitch)));
 
-            // ---- Channel point redemptions
-            r.addChild(header("Channel point redemptions", "A separate sound for redemptions (needs the Twitch login on the Rewards tab)."), 4);
+            r.addChild(header("Channel point redemptions", "A separate sound for redemptions (needs the Twitch login on the Rewards tab)."), 5);
             r.addChild(toggle("Sound", work.redemptionSound, v -> work.redemptionSound = v, "Play a sound for channel point redemptions.", C));
             r.addChild(pickerButton("Redemption sound", () -> work.redemptionSoundId, id -> work.redemptionSoundId = id,
                     () -> work.redemptionSoundVolume, () -> work.redemptionSoundPitch));
-            r.addChild(new StringWidget(C, 20, Component.empty(), font));
-            r.addChild(testButton(() -> ChatSounds.play(work.redemptionSoundId, work.redemptionSoundVolume, work.redemptionSoundPitch)));
-            r.addChild(windowSlider(work.redemptionSoundWindow, v -> work.redemptionSoundWindow = v, "redemption"));
             r.addChild(new IntSlider("Volume", 0, 100, 5, work.redemptionSoundVolume, v -> work.redemptionSoundVolume = v, v -> v + "%", C));
             r.addChild(new IntSlider("Pitch", 50, 200, 5, work.redemptionSoundPitch, v -> work.redemptionSoundPitch = v, v -> v + "%", C));
+            r.addChild(testButton(() -> ChatSounds.play(work.redemptionSoundId, work.redemptionSoundVolume, work.redemptionSoundPitch)));
+            r.addChild(windowSlider(work.redemptionSoundWindow, v -> work.redemptionSoundWindow = v, "redemption"));
+            r.addChild(spacer(4), 4);
+        }
+
+        private StringWidget spacer(int columns) {
+            return new StringWidget(C * columns + 6 * (columns - 1), 20, Component.empty(), font);
         }
 
         private StringWidget header(String text, String tooltip) {
-            StringWidget w = new StringWidget(C * 4 + 18, 12, Component.literal(text).withStyle(ChatFormatting.GOLD), font).alignLeft();
+            StringWidget w = new StringWidget(C * 5 + 24, 12, Component.literal(text).withStyle(ChatFormatting.GOLD), font).alignLeft();
             w.setTooltip(Tooltip.create(Component.literal(tooltip)));
             return w;
         }
