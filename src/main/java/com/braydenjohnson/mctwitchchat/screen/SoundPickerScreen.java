@@ -102,7 +102,7 @@ public class SoundPickerScreen extends Screen {
                     refresh();
                 });
         modButton.setTooltip(Tooltip.create(Component.literal(
-                "Only show sounds from one mod. Click to cycle, right-click or shift-click to go back.")));
+                "Only show sounds from one mod. Click or scroll to cycle; shift-click goes back.")));
         addRenderableWidget(modButton);
 
         search = new EditBox(font, 0, 0, 150, 20, Component.literal("Search sounds"));
