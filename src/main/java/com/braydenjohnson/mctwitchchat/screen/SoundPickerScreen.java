@@ -12,9 +12,9 @@ import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.layouts.FrameLayout;
 import net.minecraft.client.gui.layouts.LinearLayout;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.fml.ModList;
 
@@ -28,12 +28,13 @@ import java.util.TreeSet;
 import java.util.function.Consumer;
 
 /**
- * Pick any sound the game knows (vanilla and modded), Sound Muffler style: search, filter to
- * suggested or recently heard sounds, click a row to hear it, then "Use this sound".
+ * Pick any sound the game knows (vanilla and modded). Two panes, like ESM / Sound Muffler:
+ * a searchable list of mods on the left, a searchable list of that mod's sounds on the right.
+ * Click a sound to hear it; click it again or press "Use this sound" to pick it.
  */
 public class SoundPickerScreen extends Screen {
     private enum Filter {
-        SUGGESTED("Suggested"), RECENT("Heard recently"), ALL("All sounds");
+        ALL("All sounds"), SUGGESTED("Suggested"), RECENT("Heard recently");
         final String label;
 
         Filter(String label) {
@@ -41,23 +42,31 @@ public class SoundPickerScreen extends Screen {
         }
     }
 
+    private static final int MARGIN = 8;
+    private static final int TOP = 22;
+    private static final int LIST_TOP = 46;
+
     private final Screen parent;
     private final Consumer<String> onPick;
     private final int volume;
     private final int pitch;
     private String selected;
-    private Filter filter;
+    private Filter filter = Filter.ALL;
     private String query = "";
+    private String modQuery = "";
     /** Namespace to show ("" = every mod). */
     private String mod = "";
+
     private List<String> allSounds = List.of();
+    private final Map<String, Integer> perMod = new TreeMap<>();
     private final Map<String, String> modNames = new HashMap<>();
     private int shownCount;
 
-    private SoundList list;
+    private ModPane modPane;
+    private SoundPane soundPane;
+    private EditBox modSearch;
     private EditBox search;
     private CycleButton<Filter> filterButton;
-    private CycleButton<String> modButton;
     private LinearLayout footer;
     private Button useButton;
 
@@ -72,7 +81,6 @@ public class SoundPickerScreen extends Screen {
         this.onPick = onPick;
         this.volume = Math.max(30, volume);
         this.pitch = pitch;
-        this.filter = Filter.ALL;
     }
 
     @Override
@@ -83,51 +91,44 @@ public class SoundPickerScreen extends Screen {
         for (ResourceLocation loc : BuiltInRegistries.SOUND_EVENT.keySet()) ids.add(loc.toString());
         for (ResourceLocation loc : minecraft.getSoundManager().getAvailableSounds()) ids.add(loc.toString());
         allSounds = new ArrayList<>(ids);
-        Map<String, Integer> perMod = new TreeMap<>();
+        perMod.clear();
         for (String id : allSounds) perMod.merge(namespace(id), 1, Integer::sum);
-        List<String> mods = new ArrayList<>();
-        mods.add("");
-        // Minecraft first, then mods by name.
-        if (perMod.containsKey("minecraft")) mods.add("minecraft");
-        perMod.keySet().stream().filter(n -> !n.equals("minecraft"))
-                .sorted((a, b) -> modName(a).compareToIgnoreCase(modName(b)))
-                .forEach(mods::add);
-        modButton = CycleButton.<String>builder(ns -> Component.literal(ns.isEmpty()
-                        ? "All (" + allSounds.size() + ")"
-                        : modName(ns) + " (" + perMod.getOrDefault(ns, 0) + ")"))
-                .withValues(mods)
-                .withInitialValue(mods.contains(mod) ? mod : "")
-                .create(0, 0, 160, 20, Component.literal("Mod"), (b, v) -> {
-                    mod = v;
-                    refresh();
-                });
-        modButton.setTooltip(Tooltip.create(Component.literal(
-                "Only show sounds from one mod. Click or scroll to cycle; shift-click goes back.")));
-        addRenderableWidget(modButton);
+
+        modSearch = new EditBox(font, 0, 0, 100, 20, Component.literal("Search mods"));
+        modSearch.setHint(Component.literal("Search mods").withStyle(ChatFormatting.DARK_GRAY));
+        modSearch.setValue(modQuery);
+        modSearch.setResponder(v -> {
+            modQuery = v;
+            refreshMods();
+        });
+        addRenderableWidget(modSearch);
 
         search = new EditBox(font, 0, 0, 150, 20, Component.literal("Search sounds"));
-        search.setHint(Component.literal("Search, e.g. bell, cat, anvil").withStyle(ChatFormatting.DARK_GRAY));
+        search.setHint(Component.literal("Search sounds, e.g. bell, cat, anvil").withStyle(ChatFormatting.DARK_GRAY));
         search.setValue(query);
         search.setResponder(v -> {
             query = v;
-            refresh();
+            refreshSounds();
         });
         addRenderableWidget(search);
 
         filterButton = CycleButton.<Filter>builder(f -> Component.literal(f.label))
                 .withValues(Filter.values())
                 .withInitialValue(filter)
-                .create(0, 0, 130, 20, Component.literal("Show"), (b, v) -> {
+                .displayOnlyValue()
+                .create(0, 0, 110, 20, Component.literal("Show"), (b, v) -> {
                     filter = v;
-                    refresh();
+                    refreshSounds();
                 });
         filterButton.setTooltip(Tooltip.create(Component.literal(
-                "Suggested: short notification-friendly sounds. Heard recently: sounds the game just played around you, "
-                        + "so you can grab one you heard in-game. All sounds: everything, including modded sounds.")));
+                "All sounds: everything, including modded sounds. Suggested: short notification-friendly sounds. "
+                        + "Heard recently: sounds the game just played around you, so you can grab one you heard in-game.")));
         addRenderableWidget(filterButton);
 
-        list = new SoundList(minecraft, width, height - 88, 52, 14);
-        addRenderableWidget(list);
+        modPane = new ModPane(minecraft);
+        soundPane = new SoundPane(minecraft);
+        addRenderableWidget(modPane);
+        addRenderableWidget(soundPane);
 
         footer = LinearLayout.horizontal().spacing(8);
         footer.addChild(Button.builder(Component.literal("▶ Play"), b -> preview()).width(100).build());
@@ -138,29 +139,54 @@ public class SoundPickerScreen extends Screen {
         footer.addChild(Button.builder(CommonComponents.GUI_CANCEL, b -> minecraft.setScreen(parent)).width(100).build());
         footer.visitWidgets(this::addRenderableWidget);
 
-        refresh();
         repositionElements();
+        refreshMods();
+        refreshSounds();
         setInitialFocus(search);
+    }
+
+    private int modPaneWidth() {
+        return Math.max(110, Math.min(180, width * 3 / 10));
     }
 
     @Override
     protected void repositionElements() {
-        if (list == null) return;
-        int top = 24;
-        int total = 150 + 6 + 130 + 6 + 160;
-        int x = (width - total) / 2;
-        search.setX(x);
-        search.setY(top);
-        filterButton.setX(x + 156);
-        filterButton.setY(top);
-        modButton.setX(x + 292);
-        modButton.setY(top);
-        list.setRectangle(width, height - 88, 0, 52);
+        if (soundPane == null) return;
+        int modW = modPaneWidth();
+        int rightX = MARGIN + modW + MARGIN;
+        int rightW = width - rightX - MARGIN;
+        int listH = Math.max(40, height - LIST_TOP - 52);
+
+        modSearch.setX(MARGIN);
+        modSearch.setY(TOP);
+        modSearch.setWidth(modW);
+        search.setX(rightX);
+        search.setY(TOP);
+        search.setWidth(Math.max(60, rightW - 116));
+        filterButton.setX(rightX + rightW - 110);
+        filterButton.setY(TOP);
+
+        modPane.setRectangle(modW, listH, MARGIN, LIST_TOP);
+        soundPane.setRectangle(rightW, listH, rightX, LIST_TOP);
+
         footer.arrangeElements();
-        FrameLayout.centerInRectangle(footer, 0, height - 32, width, 32);
+        FrameLayout.centerInRectangle(footer, 0, height - 30, width, 30);
     }
 
-    private void refresh() {
+    private void refreshMods() {
+        String q = modQuery.trim().toLowerCase(Locale.ROOT);
+        List<String> mods = new ArrayList<>();
+        mods.add("");
+        if (perMod.containsKey("minecraft")) mods.add("minecraft");
+        perMod.keySet().stream().filter(n -> !n.equals("minecraft"))
+                .sorted((a, b) -> modName(a).compareToIgnoreCase(modName(b)))
+                .forEach(mods::add);
+        modPane.replace(mods.stream()
+                .filter(ns -> ns.isEmpty() || q.isEmpty() || ns.contains(q) || modName(ns).toLowerCase(Locale.ROOT).contains(q))
+                .toList());
+    }
+
+    private void refreshSounds() {
         List<String> ids = new ArrayList<>();
         switch (filter) {
             case SUGGESTED -> ids.addAll(ChatSounds.PRESETS.keySet());
@@ -171,12 +197,16 @@ public class SoundPickerScreen extends Screen {
         List<String> shown = ids.stream()
                 .filter(id -> mod.isEmpty() || namespace(id).equals(mod))
                 .filter(id -> q.isEmpty() || id.toLowerCase(Locale.ROOT).contains(q)
-                        || ChatSounds.label(id).toLowerCase(Locale.ROOT).contains(q)
-                        || modName(namespace(id)).toLowerCase(Locale.ROOT).contains(q))
+                        || ChatSounds.label(id).toLowerCase(Locale.ROOT).contains(q))
                 .toList();
         shownCount = shown.size();
-        list.replace(shown);
+        soundPane.replace(shown);
         if (useButton != null) useButton.active = selected != null;
+    }
+
+    private void selectMod(String ns) {
+        mod = ns;
+        refreshSounds();
     }
 
     private static String namespace(String id) {
@@ -186,6 +216,7 @@ public class SoundPickerScreen extends Screen {
 
     /** "mekanism" → "Mekanism" (from the mod's own display name when it is loaded). */
     private String modName(String ns) {
+        if (ns.isEmpty()) return "All mods";
         return modNames.computeIfAbsent(ns, n -> {
             if (n.equals("minecraft")) return "Minecraft";
             return ModList.get().getModContainerById(n)
@@ -202,14 +233,15 @@ public class SoundPickerScreen extends Screen {
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         super.render(g, mouseX, mouseY, partialTick);
         g.drawCenteredString(font, Component.literal(title.getString() + "  ·  ").append(
-                Component.literal(shownCount + " sounds").withStyle(ChatFormatting.GRAY)), width / 2, 8, 0xFFFFFFFF);
+                Component.literal(shownCount + " sounds in " + modName(mod)).withStyle(ChatFormatting.GRAY)), width / 2, 8, 0xFFFFFFFF);
         String chosen = selected == null ? "nothing selected" : ChatSounds.label(selected) + "  (" + selected + ")";
         g.drawCenteredString(font, Component.literal("Selected: " + chosen).withStyle(ChatFormatting.GRAY), width / 2, height - 44, 0xFFFFFFFF);
-        if (list.children().isEmpty()) {
+        if (soundPane.children().isEmpty()) {
             String msg = filter == Filter.RECENT
-                    ? "No sounds heard yet. Play for a bit, then come back."
-                    : "No sounds match your search.";
-            g.drawCenteredString(font, Component.literal(msg).withStyle(ChatFormatting.DARK_GRAY), width / 2, 70, 0xFFFFFFFF);
+                    ? "Nothing heard yet. Play for a bit, then come back."
+                    : "No sounds match.";
+            g.drawCenteredString(font, Component.literal(msg).withStyle(ChatFormatting.DARK_GRAY),
+                    soundPane.getX() + soundPane.getWidth() / 2, LIST_TOP + 20, 0xFFFFFFFF);
         }
     }
 
@@ -218,11 +250,75 @@ public class SoundPickerScreen extends Screen {
         minecraft.setScreen(parent);
     }
 
-    // ------------------------------------------------------------------ list
+    // ------------------------------------------------------------------ mod pane
 
-    private final class SoundList extends ObjectSelectionList<SoundList.Row> {
-        SoundList(Minecraft mc, int width, int height, int y, int itemHeight) {
-            super(mc, width, height, y, itemHeight);
+    private final class ModPane extends ObjectSelectionList<ModPane.Row> {
+        ModPane(Minecraft mc) {
+            super(mc, 100, 100, LIST_TOP, 14);
+        }
+
+        void replace(List<String> namespaces) {
+            clearEntries();
+            Row toSelect = null;
+            for (String ns : namespaces) {
+                Row row = new Row(ns);
+                addEntry(row);
+                if (ns.equals(mod)) toSelect = row;
+            }
+            setSelected(toSelect);
+            setScrollAmount(0);
+        }
+
+        @Override
+        public int getRowWidth() {
+            return getWidth() - 12;
+        }
+
+        protected int getScrollbarPosition() {
+            return getX() + getWidth() - 6;
+        }
+
+        final class Row extends ObjectSelectionList.Entry<Row> {
+            private final String ns;
+            private final Component name;
+            private final Component count;
+
+            Row(String ns) {
+                this.ns = ns;
+                this.name = Component.literal(modName(ns)).withStyle(ns.isEmpty() ? ChatFormatting.GOLD : ChatFormatting.WHITE);
+                int n = ns.isEmpty() ? allSounds.size() : perMod.getOrDefault(ns, 0);
+                this.count = Component.literal(Integer.toString(n)).withStyle(ChatFormatting.DARK_GRAY);
+            }
+
+            @Override
+            public void render(GuiGraphics g, int index, int top, int left, int width, int height,
+                               int mouseX, int mouseY, boolean hovering, float partialTick) {
+                int countW = font.width(count);
+                g.enableScissor(left, top, left + width - countW - 8, top + height);
+                g.drawString(font, name, left + 3, top + 2, 0xFFFFFFFF);
+                g.disableScissor();
+                g.drawString(font, count, left + width - countW - 3, top + 2, 0xFFFFFFFF);
+            }
+
+            @Override
+            public boolean mouseClicked(double mouseX, double mouseY, int button) {
+                ModPane.this.setSelected(this);
+                selectMod(ns);
+                return true;
+            }
+
+            @Override
+            public Component getNarration() {
+                return Component.literal(modName(ns));
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ sound pane
+
+    private final class SoundPane extends ObjectSelectionList<SoundPane.Row> {
+        SoundPane(Minecraft mc) {
+            super(mc, 100, 100, LIST_TOP, 14);
         }
 
         void replace(List<String> ids) {
@@ -240,7 +336,11 @@ public class SoundPickerScreen extends Screen {
 
         @Override
         public int getRowWidth() {
-            return Math.min(width - 40, 440);
+            return getWidth() - 12;
+        }
+
+        protected int getScrollbarPosition() {
+            return getX() + getWidth() - 6;
         }
 
         final class Row extends ObjectSelectionList.Entry<Row> {
@@ -258,25 +358,28 @@ public class SoundPickerScreen extends Screen {
                     int colon = id.indexOf(':');
                     text = Component.literal(colon > 0 ? id.substring(colon + 1) : id).withStyle(ChatFormatting.WHITE);
                 }
-                modLabel = Component.literal(modName(namespace(id))).withStyle(
-                        namespace(id).equals("minecraft") ? ChatFormatting.DARK_GRAY : ChatFormatting.DARK_AQUA);
+                // When one mod is picked on the left, the mod name on every row is just noise.
+                modLabel = mod.isEmpty()
+                        ? Component.literal(modName(namespace(id))).withStyle(
+                        namespace(id).equals("minecraft") ? ChatFormatting.DARK_GRAY : ChatFormatting.DARK_AQUA)
+                        : Component.empty();
             }
 
             @Override
             public void render(GuiGraphics g, int index, int top, int left, int width, int height,
                                int mouseX, int mouseY, boolean hovering, float partialTick) {
                 int modWidth = font.width(modLabel);
-                g.enableScissor(left, top, left + width - modWidth - 12, top + height);
-                g.drawString(font, text, left + 4, top + 2, 0xFFFFFFFF);
+                g.enableScissor(left, top, left + width - modWidth - 10, top + height);
+                g.drawString(font, text, left + 3, top + 2, 0xFFFFFFFF);
                 g.disableScissor();
-                g.drawString(font, modLabel, left + width - modWidth - 4, top + 2, 0xFFFFFFFF);
+                if (modWidth > 0) g.drawString(font, modLabel, left + width - modWidth - 3, top + 2, 0xFFFFFFFF);
             }
 
             @Override
             public boolean mouseClicked(double mouseX, double mouseY, int button) {
                 boolean again = id.equals(selected);
                 selected = id;
-                SoundList.this.setSelected(this);
+                SoundPane.this.setSelected(this);
                 if (useButton != null) useButton.active = true;
                 preview();
                 if (again && button == 0) {
