@@ -10,7 +10,7 @@ A client-side NeoForge mod that shows your Twitch chat inside the normal Minecra
 - **Channel point redemptions** (custom and Twitch's automatic rewards), after a one-time Twitch login
 - Gift subs show who gifted to whom, and gift bombs are grouped into one line listing every recipient
 - Optional notification sounds for chat and for redemptions, with a quiet window so busy chat doesn't spam
-- Replies show what they answer: a grey "↱ name: original message" line above the reply (like Twitch), or a compact "name ↩ other:" marker with the original on hover
+- Replies show what they answer: a grey "↱ name: original message" line above the reply (like Twitch, with the original's emotes; GIFs shown by title), or a compact "name ↩ other:" marker with the original on hover
 - Messages a mod deletes, or from someone who gets timed out, are removed from Minecraft chat too
 
 Built for **Minecraft 1.21.1 / NeoForge 21.1.x**, which is what FTB Stoneblock 4 runs on. Only you need it: servers don't need the mod and can't tell you have it.

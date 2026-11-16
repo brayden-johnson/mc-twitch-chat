@@ -99,14 +99,45 @@ public final class Formatter {
         int space = Math.max(1, font.width(" "));
         String pad = " ".repeat(Math.max(0, indent / space));
         String head = pad + "↱ " + reply.displayName() + ": ";
-        String body = reply.body().replace('\n', ' ');
-        int room = maxWidth - font.width(head) - 2;
-        if (font.width(body) > room) {
-            body = font.plainSubstrByWidth(body, Math.max(0, room - font.width("…"))) + "…";
+        Style grey = Style.EMPTY.withColor(ChatFormatting.DARK_GRAY)
+                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, replyHover(reply)));
+        MutableComponent out = Component.literal(head).setStyle(grey);
+        MutableComponent body = Component.empty().setStyle(grey);
+        out.append(body);
+
+        // Fill the line with the original's text and emotes, then cut with "…" so it never wraps.
+        int limit = maxWidth - 2;
+        int ellipsis = font.width("…");
+        int used = font.width(head);
+        List<Segment> segs = reply.segments();
+        for (int i = 0; i < segs.size(); i++) {
+            boolean last = i == segs.size() - 1;
+            Segment s = segs.get(i);
+            if (s instanceof Segment.Text t) {
+                String text = t.text().replace('\n', ' ');
+                int w = font.width(text);
+                // Leave room for "…" unless this is the last piece.
+                if (used + w <= (last ? limit : limit - ellipsis)) {
+                    body.append(Component.literal(text));
+                    used += w;
+                    continue;
+                }
+                String cut = font.plainSubstrByWidth(text, Math.max(0, limit - used - ellipsis));
+                body.append(Component.literal(cut + "…"));
+                break;
+            } else if (s instanceof Segment.Emote e) {
+                Component c = Placeholders.component(e, cfg);
+                int w = font.width(c);
+                if (used + w <= (last ? limit : limit - ellipsis)) {
+                    body.append(c);
+                    used += w;
+                    continue;
+                }
+                body.append(Component.literal("…"));
+                break;
+            }
         }
-        return Component.literal(head + body).setStyle(Style.EMPTY
-                .withColor(ChatFormatting.DARK_GRAY)
-                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, replyHover(reply))));
+        return out;
     }
 
     /** The same status-line style used for "Connected to #channel" etc. */

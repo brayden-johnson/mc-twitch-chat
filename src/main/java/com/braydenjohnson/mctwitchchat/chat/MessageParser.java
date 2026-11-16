@@ -9,6 +9,8 @@ import com.braydenjohnson.mctwitchchat.emote.ImageCache;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /** Splits a chat message into text, Twitch emotes, Twitch GIFs, extension emotes and emoji. */
 public final class MessageParser {
@@ -20,7 +22,35 @@ public final class MessageParser {
     private record Range(int start, int end, String id, String gifUrl) {
     }
 
+    /**
+     * Twitch emotes seen in chat this session, name → id. Quoted reply text has no emote
+     * positions, so this lets quotes still show Twitch emotes (including other channels' sub
+     * emotes) that have appeared in chat before.
+     */
+    private static final Map<String, String> TWITCH_SEEN = new ConcurrentHashMap<>();
+
     private MessageParser() {
+    }
+
+    /**
+     * Parses text that came without Twitch's emote positions (a reply's quoted original).
+     * Twitch emotes are matched by name against ones already seen in chat; GIFs aren't possible here.
+     */
+    public static List<Segment> parseQuoted(String text, ChatConfig cfg) {
+        List<Segment> out = new ArrayList<>();
+        if (text == null || text.isEmpty()) return out;
+        addText(out, text, cfg, true);
+        return merge(out);
+    }
+
+    /** Replaces GIFs with their title, for places too small for a GIF (reply quotes). */
+    public static List<Segment> condenseGifs(List<Segment> segments) {
+        List<Segment> out = new ArrayList<>(segments.size());
+        for (Segment s : segments) {
+            if (s instanceof Segment.Emote e && e.lines() > 0) out.add(new Segment.Text(e.name()));
+            else out.add(s);
+        }
+        return merge(out);
     }
 
     /**
@@ -58,7 +88,7 @@ public final class MessageParser {
         int pos = 0;
         for (Range r : ranges) {
             if (r.start() < pos) continue;
-            if (r.start() > pos) addText(out, new String(cps, pos, r.start() - pos), cfg);
+            if (r.start() > pos) addText(out, new String(cps, pos, r.start() - pos), cfg, false);
             String name = new String(cps, r.start(), r.end() - r.start() + 1);
             if (r.gifUrl() != null) {
                 out.add(new Segment.Emote(name, "Twitch GIF (GIPHY)",
@@ -66,10 +96,11 @@ public final class MessageParser {
                         16, 9, cfg.gifLines));
             } else {
                 out.add(emote(EmoteDef.twitch(r.id(), name), cfg));
+                if (TWITCH_SEEN.size() < 20000) TWITCH_SEEN.put(name, r.id());
             }
             pos = r.end() + 1;
         }
-        if (pos < cps.length) addText(out, new String(cps, pos, cps.length - pos), cfg);
+        if (pos < cps.length) addText(out, new String(cps, pos, cps.length - pos), cfg, false);
         return merge(out);
     }
 
@@ -84,7 +115,7 @@ public final class MessageParser {
         }
     }
 
-    private static void addText(List<Segment> out, String chunk, ChatConfig cfg) {
+    private static void addText(List<Segment> out, String chunk, ChatConfig cfg, boolean matchTwitchByName) {
         int n = chunk.length();
         int i = 0;
         while (i < n) {
@@ -97,7 +128,8 @@ public final class MessageParser {
                 out.add(new Segment.Text(token));
                 continue;
             }
-            EmoteDef def = EmoteRegistry.lookup(token, cfg);
+            String twitchId = matchTwitchByName && cfg.twitchEmotes ? TWITCH_SEEN.get(token) : null;
+            EmoteDef def = twitchId != null ? EmoteDef.twitch(twitchId, token) : EmoteRegistry.lookup(token, cfg);
             if (def != null) {
                 out.add(emote(def, cfg));
                 continue;

@@ -67,6 +67,15 @@ public final class StreamChatManager {
 
     private final Map<String, GiftBomb> bombs = new ConcurrentHashMap<>();
 
+    /** Recent messages' parsed content by message id, so reply quotes can reuse the exact emotes. */
+    private final Map<String, List<Segment>> recentSegments = java.util.Collections.synchronizedMap(
+            new LinkedHashMap<>(256, 0.75f, false) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, List<Segment>> eldest) {
+                    return size() > 1000;
+                }
+            });
+
     // Render thread only: when the last chat message / redemption arrived, for the quiet windows.
     private long lastChatAt = Long.MIN_VALUE / 2;
     private long lastRedemptionAt = Long.MIN_VALUE / 2;
@@ -267,13 +276,18 @@ public final class StreamChatManager {
             String parentLogin = m.tag("reply-parent-user-login");
             String parentName = m.tag("reply-parent-display-name");
             if (parentName.isEmpty()) parentName = parentLogin;
-            reply = new ChatLine.Reply(parentLogin, parentName, m.tag("reply-parent-msg-body"));
+            String parentBody = m.tag("reply-parent-msg-body");
+            // Seen the original? Reuse its exact emotes. If not, match emotes by name.
+            List<Segment> seen = recentSegments.get(m.tag("reply-parent-msg-id"));
+            List<Segment> quoted = seen != null ? MessageParser.condenseGifs(seen) : MessageParser.parseQuoted(parentBody, cfg);
+            reply = new ChatLine.Reply(parentLogin, parentName, parentBody, quoted);
             if (cfg.replyHideMention && cfg.replyStyle != ChatConfig.ReplyStyle.OFF) {
                 segments = stripMention(segments, parentLogin, parentName);
             }
         }
         ChatLine line = new ChatLine(m.tag("id"), login, display, m.tag("color"), badges(m), segments, action, highlight,
                 null, false, reply);
+        if (!line.id().isEmpty()) recentSegments.put(line.id(), segments);
         enqueue(line);
     }
 
@@ -455,7 +469,9 @@ public final class StreamChatManager {
     /** Waits (briefly) for the message's emote images so widths are right, keeping message order. */
     private void enqueue(ChatLine line) {
         ChatConfig cfg = ChatConfig.get();
-        CompletableFuture<?>[] waits = line.segments().stream()
+        List<Segment> all = new ArrayList<>(line.segments());
+        if (line.reply() != null && cfg.replyStyle == ChatConfig.ReplyStyle.CONTEXT) all.addAll(line.reply().segments());
+        CompletableFuture<?>[] waits = all.stream()
                 .filter(s -> s instanceof Segment.Emote)
                 .map(s -> ((Segment.Emote) s).image().future)
                 .toArray(CompletableFuture[]::new);

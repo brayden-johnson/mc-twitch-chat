@@ -14,8 +14,12 @@ public record ChatLine(String id, String login, String displayName, String color
                        List<Segment> segments, boolean action, boolean highlight, String notice, boolean redemption,
                        Reply reply) {
 
-    /** The message being replied to, from Twitch's reply-parent-* tags. */
-    public record Reply(String login, String displayName, String body) {
+    /**
+     * The message being replied to, from Twitch's reply-parent-* tags.
+     *
+     * @param segments the original message with emotes, for the context line (GIFs condensed to their title)
+     */
+    public record Reply(String login, String displayName, String body, List<Segment> segments) {
     }
 
     public ChatLine(String id, String login, String displayName, String color, List<String> badges,
