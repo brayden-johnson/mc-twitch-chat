@@ -24,6 +24,9 @@ public final class ChatConfig {
 
     public enum TimestampMode { OFF, H24, H12 }
 
+    /** How replies show the message they answer. */
+    public enum ReplyStyle { CONTEXT, COMPACT, OFF }
+
     // --- Connection
     public boolean enabled = true;
     public String channel = "slayyyden";
@@ -44,6 +47,10 @@ public final class ChatConfig {
     public String indicatorColor = "#9146FF";
     public boolean showNotices = true;
     public boolean actionItalic = true;
+    /** CONTEXT: a grey "↱ name: message" line above the reply. COMPACT: "name ↩ other:" with a hover. */
+    public ReplyStyle replyStyle = ReplyStyle.CONTEXT;
+    /** Remove the "@name" Twitch puts at the start of a reply, since the reply marker already names them. */
+    public boolean replyHideMention = true;
 
     // --- Emotes
     public boolean twitchEmotes = true;
@@ -178,6 +185,7 @@ public final class ChatConfig {
         noticeColor = nz(noticeColor);
         if (nameColorMode == null) nameColorMode = NameColorMode.TWITCH;
         if (timestamps == null) timestamps = TimestampMode.OFF;
+        if (replyStyle == null) replyStyle = ReplyStyle.CONTEXT;
         emoteSize = Math.max(6, Math.min(18, emoteSize));
         maxWaitMs = Math.max(0, Math.min(5000, maxWaitMs));
         gifLines = Math.max(1, Math.min(8, gifLines));

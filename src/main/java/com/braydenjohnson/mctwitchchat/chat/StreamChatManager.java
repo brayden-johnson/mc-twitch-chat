@@ -262,7 +262,18 @@ public final class StreamChatManager {
             }
         }
         boolean highlight = isHighlight(text, login, cfg) || "highlighted-message".equals(m.tag("msg-id"));
-        ChatLine line = new ChatLine(m.tag("id"), login, display, m.tag("color"), badges(m), segments, action, highlight, null, false);
+        ChatLine.Reply reply = null;
+        if (!m.tag("reply-parent-msg-id").isEmpty()) {
+            String parentLogin = m.tag("reply-parent-user-login");
+            String parentName = m.tag("reply-parent-display-name");
+            if (parentName.isEmpty()) parentName = parentLogin;
+            reply = new ChatLine.Reply(parentLogin, parentName, m.tag("reply-parent-msg-body"));
+            if (cfg.replyHideMention && cfg.replyStyle != ChatConfig.ReplyStyle.OFF) {
+                segments = stripMention(segments, parentLogin, parentName);
+            }
+        }
+        ChatLine line = new ChatLine(m.tag("id"), login, display, m.tag("color"), badges(m), segments, action, highlight,
+                null, false, reply);
         enqueue(line);
     }
 
@@ -319,6 +330,26 @@ public final class StreamChatManager {
         List<Segment> segments = MessageParser.parse(text, m.tag("emotes"), m.tag("gifs"), cfg);
         String display = text.isEmpty() ? "" : name;
         enqueue(new ChatLine(m.tag("id"), login, display, m.tag("color"), badges(m), segments, false, false, system, false));
+    }
+
+    /**
+     * Drops a leading "@name " from a reply when it names the person being replied to. Works on the
+     * parsed segments so Twitch's emote positions (which count the mention) stay correct.
+     */
+    static List<Segment> stripMention(List<Segment> segments, String login, String displayName) {
+        if (segments.isEmpty() || !(segments.get(0) instanceof Segment.Text first)) return segments;
+        String t = first.text();
+        if (!t.startsWith("@")) return segments;
+        int end = 1;
+        while (end < t.length() && !Character.isWhitespace(t.charAt(end))) end++;
+        String name = t.substring(1, end).replaceAll("[,:]$", "");
+        if (!name.equalsIgnoreCase(login) && !name.equalsIgnoreCase(displayName)) return segments;
+        while (end < t.length() && Character.isWhitespace(t.charAt(end))) end++;
+        List<Segment> out = new ArrayList<>(segments);
+        String rest = t.substring(end);
+        if (rest.isEmpty()) out.remove(0);
+        else out.set(0, new Segment.Text(rest));
+        return out.isEmpty() ? segments : out;
     }
 
     private void flushBomb(String login, GiftBomb bomb) {
@@ -457,6 +488,12 @@ public final class StreamChatManager {
         ChatConfig cfg = ChatConfig.get();
         GuiMessageTag tag = tag(cfg);
         List<MessageSignature> sigs = new ArrayList<>();
+        if (line.reply() != null && cfg.replyStyle == ChatConfig.ReplyStyle.CONTEXT && !line.reply().body().isEmpty()) {
+            // Twitch-style context line above the reply: "↱ name: original message", cut to one line.
+            MessageSignature ctx = signature(line.id() + "#reply");
+            mc.gui.getChat().addMessage(Formatter.replyContext(cfg, line, chatLineWidth(mc)), ctx, tag);
+            sigs.add(ctx);
+        }
         MessageSignature sig = signature(line.id());
         mc.gui.getChat().addMessage(Formatter.format(cfg, line), sig, tag);
         sigs.add(sig);
@@ -503,6 +540,13 @@ public final class StreamChatManager {
         if (cfg.chatSound && quiet && !alreadyPinged) {
             ChatSounds.play(cfg.chatSoundId, cfg.chatSoundVolume, cfg.chatSoundPitch);
         }
+    }
+
+    /** Width of one chat line in GUI pixels (chat width setting divided by chat scale). */
+    private static int chatLineWidth(Minecraft mc) {
+        ChatComponent chat = mc.gui.getChat();
+        double scale = chat.getScale();
+        return (int) Math.floor(chat.getWidth() / (scale <= 0 ? 1 : scale));
     }
 
     public void postStatus(String text) {

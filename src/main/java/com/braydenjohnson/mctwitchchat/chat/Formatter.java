@@ -49,6 +49,14 @@ public final class Formatter {
             Component hover = Component.literal(shown).setStyle(nameStyle)
                     .append(Component.literal("\ntwitch.tv/" + line.login()).withStyle(ChatFormatting.GRAY));
             root.append(Component.literal(shown).setStyle(nameStyle.withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, hover))));
+            ChatLine.Reply reply = line.reply();
+            boolean compact = reply != null && (cfg.replyStyle == ChatConfig.ReplyStyle.COMPACT
+                    || (cfg.replyStyle == ChatConfig.ReplyStyle.CONTEXT && reply.body().isEmpty()));
+            if (compact) {
+                root.append(Component.literal(" ↩ " + reply.displayName()).setStyle(Style.EMPTY
+                        .withColor(ChatFormatting.GRAY)
+                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, replyHover(reply)))));
+            }
             root.append(line.action() ? Component.literal(" ") : LegacyText.parse(cfg.separator));
         }
 
@@ -69,6 +77,36 @@ public final class Formatter {
             else if (s instanceof Segment.Emote e) body.append(Placeholders.component(e, cfg));
         }
         return body;
+    }
+
+    private static Component replyHover(ChatLine.Reply reply) {
+        return Component.literal("Replying to ").withStyle(ChatFormatting.GRAY)
+                .append(Component.literal(reply.displayName()).withStyle(ChatFormatting.WHITE))
+                .append(Component.literal(reply.body().isEmpty() ? "" : "\n" + reply.body()).withStyle(ChatFormatting.GRAY));
+    }
+
+    /**
+     * The grey line shown above a reply: "↱ name: original message", indented to line up with the
+     * names under the prefix and cut with "…" so it never wraps onto a second line.
+     */
+    public static MutableComponent replyContext(ChatConfig cfg, ChatLine line, int maxWidth) {
+        net.minecraft.client.gui.Font font = net.minecraft.client.Minecraft.getInstance().font;
+        ChatLine.Reply reply = line.reply();
+        MutableComponent lead = Component.empty();
+        if (cfg.timestamps != ChatConfig.TimestampMode.OFF) lead.append(Component.literal("[00:00] "));
+        lead.append(LegacyText.parse(cfg.prefix));
+        int indent = font.width(lead);
+        int space = Math.max(1, font.width(" "));
+        String pad = " ".repeat(Math.max(0, indent / space));
+        String head = pad + "↱ " + reply.displayName() + ": ";
+        String body = reply.body().replace('\n', ' ');
+        int room = maxWidth - font.width(head) - 2;
+        if (font.width(body) > room) {
+            body = font.plainSubstrByWidth(body, Math.max(0, room - font.width("…"))) + "…";
+        }
+        return Component.literal(head + body).setStyle(Style.EMPTY
+                .withColor(ChatFormatting.DARK_GRAY)
+                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, replyHover(reply))));
     }
 
     /** The same status-line style used for "Connected to #channel" etc. */

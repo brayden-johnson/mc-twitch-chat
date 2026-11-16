@@ -450,6 +450,21 @@ public class StreamChatScreen extends Screen {
                     "Comma separated extra words that highlight a message."));
             r.addChild(label("Highlight colour"));
             r.addChild(edit(work.highlightColor, 40, v -> work.highlightColor = v, "& code or #RRGGBB for highlighted messages."));
+            CycleButton<ChatConfig.ReplyStyle> replies = CycleButton.<ChatConfig.ReplyStyle>builder(s -> Component.literal(switch (s) {
+                        case CONTEXT -> "Context line";
+                        case COMPACT -> "Compact";
+                        case OFF -> "Off";
+                    }))
+                    .withValues(ChatConfig.ReplyStyle.values())
+                    .withInitialValue(work.replyStyle)
+                    .create(0, 0, W, 20, Component.literal("Replies"), (btn, v) -> work.replyStyle = v);
+            replies.setTooltip(Tooltip.create(Component.literal(
+                    "Context line: a grey \"↱ name: their message\" line above each reply, like Twitch. "
+                            + "Compact: no extra line, just \"name ↩ other:\"; hover the arrow to see what they replied to. "
+                            + "Off: replies look like normal messages.")));
+            r.addChild(replies);
+            r.addChild(toggle("Hide reply @name", work.replyHideMention, v -> work.replyHideMention = v,
+                    "Twitch starts every reply with @name. Since the reply already shows who it answers, hide it."));
         }
     }
 
